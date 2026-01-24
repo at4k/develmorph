@@ -1,5 +1,6 @@
 import numpy as np
-from viz import plot_cells
+from develmorph.viz import plot_cells
+from develmorph.physics import compute_repulsion
 
 
 def main():
