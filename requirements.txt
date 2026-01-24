@@ -3,3 +3,4 @@ matplotlib
 napari
 jax
 jaxlib
+pytest
