@@ -1,6 +1,7 @@
 import numpy as np
 
 from develmorph.physics import compute_repulsion
+from develmorph.project import project_overlap, project_shell
 
 
 def step(
@@ -23,9 +24,13 @@ def step(
 
     # Overdamped update
     velocities = forces / gamma
-    new_positions = positions + dt * velocities
+    x = positions + dt * velocities
 
-    return new_positions
+    # Projection
+    x = project_overlap(x, radii)
+    x = project_shell(x)
+
+    return x
 
 
 def simulate(
