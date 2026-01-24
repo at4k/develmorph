@@ -10,4 +10,5 @@ dependencies = [
     "matplotlib>=3.10.8",
     "napari>=0.6.6",
     "numpy>=2.4.1",
+    "pytest>=9.0.2",
 ]
