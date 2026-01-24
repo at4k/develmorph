@@ -1,8 +1,13 @@
-def test_plot_runs_without_error():
-    import numpy as np
-    from develmorph.viz import plot_cells
+import numpy as np
+from develmorph.viz import make_figure
 
-    positions = np.zeros((1, 3))
-    radii = np.ones(1)
-    plot_cells(positions, radii)
-    assert True
+
+def test_make_figure():
+
+    pos = np.zeros((2, 3))
+    r = np.ones(2)
+
+    fig, ax = make_figure(pos, r)
+
+    assert fig is not None
+    assert ax is not None
