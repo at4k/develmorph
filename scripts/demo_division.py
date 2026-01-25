@@ -1,6 +1,6 @@
 import numpy as np
 
-from develmorph.solver import simulate
+from develmorph.engine import World
 from develmorph.viz import plot_cells
 
 
@@ -9,16 +9,15 @@ def main():
     pos = np.array([[0, 0, 0]])
     r = np.array([1.0])
 
-    traj = simulate(
-        pos,
-        r,
-        n_steps=300,
-        dt=0.02,
-        division_steps=[50, 100, 150],
-    )
+    world = World(pos, r, dt=0.02)
 
-    last_pos, last_r = traj[-1]
-    plot_cells(last_pos, last_r)
+    world.set_divisions([50, 100, 150])
+
+    traj = world.run(300)
+
+    p, r = traj[-1]
+
+    plot_cells(p, r)
 
 
 if __name__ == "__main__":

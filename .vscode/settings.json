@@ -2,5 +2,15 @@
     "python.defaultInterpreterPath": ".venv/bin/python",
     "python.analysis.extraPaths": [
         ".venv/lib/python3.*/site-packages"
+    ],
+    "cSpell.words": [
+        "cmap",
+        "coolwarm",
+        "develmorph",
+        "linalg",
+        "nvec",
+        "Overdamped",
+        "randn",
+        "traj"
     ]
 }
