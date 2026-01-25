@@ -4,13 +4,19 @@
         ".venv/lib/python3.*/site-packages"
     ],
     "cSpell.words": [
+        "azim",
+        "celllineage",
         "cmap",
         "coolwarm",
+        "depthshade",
         "develmorph",
         "linalg",
+        "maxs",
+        "mplot",
         "nvec",
         "Overdamped",
         "randn",
+        "toolkits",
         "traj"
     ]
 }
