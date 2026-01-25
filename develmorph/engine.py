@@ -2,6 +2,7 @@ import numpy as np
 
 from develmorph.solver import step
 from develmorph.division import divide_cell
+from develmorph.polarity import PolarityField
 
 
 class World:
@@ -19,6 +20,9 @@ class World:
 
         self.division_steps = []
 
+        self.polarity = PolarityField()
+        self.cell_polarity = self.polarity.value(self.positions)
+
     def set_divisions(self, steps):
         self.division_steps = steps
 
@@ -31,12 +35,20 @@ class World:
 
             self.positions, self.radii = divide_cell(self.positions, self.radii, idx)
 
+            parent_p = self.cell_polarity[idx]
+            self.cell_polarity = np.delete(self.cell_polarity, idx)
+            self.cell_polarity = np.insert(
+                self.cell_polarity, idx, [parent_p, parent_p]
+            )
+
             self.velocities = np.zeros_like(self.positions)
 
         # Physics
         self.positions, self.velocities = step(
             self.positions, self.velocities, self.radii, self.dt
         )
+
+        self.cell_polarity = self.polarity.value(self.positions)
 
         self.step_count += 1
         self.time += self.dt
