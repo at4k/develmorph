@@ -3,22 +3,36 @@
 
 from __future__ import annotations
 import numpy as np
+from typing import Callable
 
 
-import numpy as np
+def default_division_axis_rule(step: int, polarity: np.ndarray) -> np.ndarray:
+    """
+    Default rule: always divide along polarity axis.
+    """
+    return polarity
 
 
 class CellLineage:
     """
     Represents a developmental lineage that prescribes
     division behavior independently of physical simulation.
+    Controls lineage-level developmental rules such as division orientation.
 
     Phase2-A assumption:
     Division axes are predefined and deterministic.
     """
 
-    def __init__(self, lineage_id: int):
+    def __init__(
+        self,
+        lineage_id: int,
+        polarity: np.ndarray = np.array([1.0, 0.0, 0.0]),
+        division_axis_rule: Callable[[int, np.ndarray], np.ndarray] | None = None,
+    ):
         self.lineage_id = lineage_id
+        self.polarity = polarity / np.linalg.norm(polarity)
+
+        self.division_axis_rule = division_axis_rule or default_division_axis_rule
 
     def decide_division_axis(self, step: int) -> np.ndarray:
         """
@@ -35,32 +49,8 @@ class CellLineage:
             Normalized 3D division axis.
         """
         # Temporary deterministic rule for Phase2-A
-        axis = np.array([1.0, 0.0, 0.0])
+        axis = self.division_axis_rule(step, self.polarity)
 
         # Normalize defensively
         axis = axis / np.linalg.norm(axis)
         return axis
-
-
-# --- Example integration sketch (engine-side) ---
-
-
-class DivisionEngine:
-    def __init__(self, lineage: CellLineage):
-        self.lineage = lineage
-
-    def divide_cell(self, cell, world):
-        if not self.lineage.should_divide(cell, world):
-            return None
-
-        axis = self.lineage.decide_division_axis(cell, world)
-        eps = self.lineage.eps
-
-        pos_a = cell.pos + eps * axis
-        pos_b = cell.pos - eps * axis
-
-        # create daughter cells (details depend on your existing Cell class)
-        cell_a = cell.clone(pos=pos_a)
-        cell_b = cell.clone(pos=pos_b)
-
-        return cell_a, cell_b

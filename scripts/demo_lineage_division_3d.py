@@ -29,7 +29,7 @@ class SimpleCell:
         self.lineage = lineage
         self.position = np.asarray(position, dtype=float)
 
-    def divide(self, step: int):
+    def divide(self, step: int, factory):
         """
         Perform a deterministic division along the lineage axis.
 
@@ -38,29 +38,51 @@ class SimpleCell:
         axis = self.lineage.decide_division_axis(step)
         offset = 0.5 * axis
 
-        c1 = SimpleCell(
-            cell_id=self.cell_id * 2 + 1,
-            lineage=self.lineage,
-            position=self.position + offset,
-        )
-        c2 = SimpleCell(
-            cell_id=self.cell_id * 2 + 2,
-            lineage=self.lineage,
-            position=self.position - offset,
-        )
+        c1 = factory.create(self.lineage, self.position + offset)
+        c2 = factory.create(self.lineage, self.position - offset)
+        print(f"step={step}: {c1},{c2}")
         return c1, c2
 
 
+class CellFactory:
+    def __init__(self):
+        self.next_id = 0
+
+    def create(self, lineage, position):
+        cid = self.next_id
+        self.next_id += 1
+        return SimpleCell(cid, lineage, position)
+
+
+def alternating_division_rule(step: int, polarity: np.ndarray):
+    """
+    Step 1: along polarity (x-axis)
+    Step 2: orthogonal direction (y-axis)
+    """
+    if step == 1:
+        return polarity
+    elif step == 2:
+        return np.array([0.0, 1.0, 0.0])
+    else:
+        return polarity
+
+
 def run_demo():
-    lineage = CellLineage(lineage_id=0)
+    lineage = CellLineage(
+        lineage_id=0,
+        polarity=np.array([1.0, 0.0, 0.0]),
+        division_axis_rule=alternating_division_rule,
+    )
     recorder = LineageRecorder()
 
     # initial cell
-    cells = [SimpleCell(cell_id=0, lineage=lineage, position=[0, 0, 0])]
+    factory = CellFactory()
+    cells = [factory.create(lineage, [0, 0, 0])]
 
     n_steps = 3
 
     for step in range(n_steps):
+
         next_cells = []
         for cell in cells:
             cell.position += 0.1 * lineage.decide_division_axis(step)
@@ -75,14 +97,26 @@ def run_demo():
 
             # divide after step 0
             if step >= 1:
-                daughters = cell.divide(step)
+                daughters = cell.divide(step, factory)
                 next_cells.extend(daughters)
             else:
                 next_cells.append(cell)
 
         cells = next_cells
 
+    for cell in cells:
+        recorder.record(
+            step=n_steps,
+            cell_id=cell.cell_id,
+            lineage_id=lineage.lineage_id,
+            position=cell.position,
+            divided=False,
+        )
+    print(cells)
+
     df = recorder.to_dataframe()
+    print(df)
+
     visualize_lineage_3d(df)
 
 
