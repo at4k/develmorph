@@ -1,0 +1,25 @@
+# C. elegans early embryo division program
+# P0 -> 4-cell stage
+
+lineage_id: celegans_early
+
+steps:
+  # 1-cell -> 2-cell
+  - step: 1
+    divisions:
+      - parent: P0
+        axis: major_axis
+        daughters: [AB, P1]
+
+  # 2-cell -> 4-cell (AB divides first, then P1)
+  - step: 2
+    divisions:
+      - parent: AB
+        axis: orthogonal_axis
+        daughters: [ABa, ABp]
+
+  - step: 3
+    divisions:
+      - parent: P1
+        axis: major_axis
+        daughters: [EMS, P2]

@@ -1,56 +1,97 @@
-# Phase2-A: CellLineage implementation
-# Minimal, deterministic lineage-controlled division axis
-
-from __future__ import annotations
+import yaml
 import numpy as np
-from typing import Callable
+from dataclasses import dataclass
+from typing import List, Optional, Dict, Any
 
 
-def default_division_axis_rule(step: int, polarity: np.ndarray) -> np.ndarray:
-    """
-    Default rule: always divide along polarity axis.
-    """
-    return polarity
+@dataclass
+class DivisionRule:
+    """A single division instruction."""
+    parent: str
+    axis: str  # major_axis, minor_axis, orthogonal_axis
+    daughters: List[str]
+
+
+@dataclass
+class StepProgram:
+    """All events happening at a given step."""
+    step: int
+    divisions: List[DivisionRule]
+    fate: List[Dict[str, Any]]  # For future expansion
 
 
 class CellLineage:
     """
-    Represents a developmental lineage that prescribes
-    division behavior independently of physical simulation.
-    Controls lineage-level developmental rules such as division orientation.
+    Lineage-defined division program loaded from YAML.
 
-    Phase2-A assumption:
-    Division axes are predefined and deterministic.
+    Provides division rules based on step number and cell name.
+    Does not execute division; only provides the rules.
     """
 
-    def __init__(
-        self,
-        lineage_id: int,
-        polarity: np.ndarray = np.array([1.0, 0.0, 0.0]),
-        division_axis_rule: Callable[[int, np.ndarray], np.ndarray] | None = None,
-    ):
-        self.lineage_id = lineage_id
-        self.polarity = polarity / np.linalg.norm(polarity)
+    AXIS_MAP = {
+        "major_axis": 0,     # e1
+        "minor_axis": 1,     # e2
+        "orthogonal_axis": 2  # e3
+    }
 
-        self.division_axis_rule = division_axis_rule or default_division_axis_rule
+    def __init__(self, yaml_path: str):
+        with open(yaml_path, "r") as f:
+            data = yaml.safe_load(f)
 
-    def decide_division_axis(self, step: int) -> np.ndarray:
+        self.lineage_id = data.get("lineage_id", "unknown")
+        self._steps: Dict[int, StepProgram] = {}
+        self._parse_steps(data.get("steps", []))
+
+    def _parse_steps(self, steps_data: list):
+        for step_data in steps_data:
+            step_num = step_data["step"]
+
+            divisions = []
+            for div in step_data.get("divisions", []):
+                divisions.append(DivisionRule(
+                    parent=div["parent"],
+                    axis=div["axis"],
+                    daughters=div["daughters"],
+                ))
+
+            fate = step_data.get("fate", [])
+
+            self._steps[step_num] = StepProgram(
+                step=step_num,
+                divisions=divisions,
+                fate=fate,
+            )
+
+    def get_step_program(self, step: int) -> Optional[StepProgram]:
+        """Get the full program for a step."""
+        return self._steps.get(step)
+
+    def get_division_for_cell(
+        self, step: int, cell_name: str
+    ) -> Optional[DivisionRule]:
+        """Get division rule for a specific cell at a step."""
+        program = self._steps.get(step)
+        if program is None:
+            return None
+
+        for div in program.divisions:
+            if div.parent == cell_name:
+                return div
+        return None
+
+    def resolve_division_axis(
+        self, rule: DivisionRule, parent_orientation: np.ndarray
+    ) -> np.ndarray:
         """
-        Decide the division axis for a given developmental step.
+        Resolve division axis from rule and parent orientation.
 
-        Parameters
-        ----------
-        step : int
-            Discrete developmental time step.
+        Args:
+            rule: DivisionRule specifying axis type
+            parent_orientation: 3x3 orthonormal matrix [e1, e2, e3]
 
-        Returns
-        -------
-        np.ndarray, shape (3,)
-            Normalized 3D division axis.
+        Returns:
+            3D unit vector for division axis
         """
-        # Temporary deterministic rule for Phase2-A
-        axis = self.division_axis_rule(step, self.polarity)
-
-        # Normalize defensively
-        axis = axis / np.linalg.norm(axis)
-        return axis
+        axis_idx = self.AXIS_MAP[rule.axis]
+        axis = parent_orientation[:, axis_idx]
+        return axis / np.linalg.norm(axis)

@@ -67,3 +67,88 @@ def visualize_lineage_3d(df: pd.DataFrame):
 
     plt.legend()
     plt.show()
+
+
+def visualize_cells_3d(cells, title="Cell Division", show_orientation=True):
+    """
+    Visualize cells in 3D with their orientations.
+
+    Parameters
+    ----------
+    cells : dict[str, Cell] or list[Cell]
+        Cells to visualize
+    title : str
+        Plot title
+    show_orientation : bool
+        If True, draw arrows showing e1 (red), e2 (green), e3 (blue)
+    """
+    import numpy as np
+
+    if isinstance(cells, dict):
+        cells = list(cells.values())
+
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(projection="3d")
+
+    # Collect positions
+    positions = np.array([c.position for c in cells])
+
+    # Plot cells as spheres
+    ax.scatter(
+        positions[:, 0],
+        positions[:, 1],
+        positions[:, 2],
+        s=200,
+        alpha=0.6,
+    )
+
+    # Add labels and orientation arrows
+    arrow_length = 0.3
+    for cell in cells:
+        pos = cell.position
+
+        # Label
+        ax.text(pos[0], pos[1], pos[2] + 0.15, cell.name, fontsize=10, ha="center")
+
+        if show_orientation:
+            # e1 (major axis) - red
+            e1 = cell.orientation[:, 0]
+            ax.quiver(pos[0], pos[1], pos[2],
+                      e1[0], e1[1], e1[2],
+                      length=arrow_length, color="red", arrow_length_ratio=0.3)
+
+            # e2 (minor axis) - green
+            e2 = cell.orientation[:, 1]
+            ax.quiver(pos[0], pos[1], pos[2],
+                      e2[0], e2[1], e2[2],
+                      length=arrow_length, color="green", arrow_length_ratio=0.3)
+
+            # e3 (orthogonal) - blue
+            e3 = cell.orientation[:, 2]
+            ax.quiver(pos[0], pos[1], pos[2],
+                      e3[0], e3[1], e3[2],
+                      length=arrow_length, color="blue", arrow_length_ratio=0.3)
+
+    # Set equal aspect ratio
+    max_range = np.max(np.abs(positions)) + 0.5
+    ax.set_xlim(-max_range, max_range)
+    ax.set_ylim(-max_range, max_range)
+    ax.set_zlim(-max_range, max_range)
+
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+    ax.set_title(title)
+
+    # Legend for orientation
+    if show_orientation:
+        from matplotlib.lines import Line2D
+        legend_elements = [
+            Line2D([0], [0], color="red", label="e1 (major)"),
+            Line2D([0], [0], color="green", label="e2 (minor)"),
+            Line2D([0], [0], color="blue", label="e3 (orthogonal)"),
+        ]
+        ax.legend(handles=legend_elements, loc="upper left")
+
+    plt.tight_layout()
+    plt.show()
