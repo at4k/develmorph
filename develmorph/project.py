@@ -33,9 +33,12 @@ def project_overlap(positions, radii, n_iter=5):
     return x
 
 
-def project_shell(positions, a=5.0, b=5.0, c=5.0):
+def project_shell(positions, a=5.0, b=5.0, c=5.0, radii=None):
     """
     Project cells inside an ellipsoidal shell.
+
+    If radii is provided, ensures cell surface (not just center)
+    stays inside the shell.
     """
 
     x = positions.copy()
@@ -44,7 +47,16 @@ def project_shell(positions, a=5.0, b=5.0, c=5.0):
 
         v = x[i]
 
-        s = (v[0] ** 2) / (a * a) + (v[1] ** 2) / (b * b) + (v[2] ** 2) / (c * c)
+        # Shrink effective shell by cell radius
+        if radii is not None:
+            r = radii[i]
+            ea = max(a - r, 0.1)
+            eb = max(b - r, 0.1)
+            ec = max(c - r, 0.1)
+        else:
+            ea, eb, ec = a, b, c
+
+        s = (v[0] ** 2) / (ea * ea) + (v[1] ** 2) / (eb * eb) + (v[2] ** 2) / (ec * ec)
 
         if s > 1.0:
 

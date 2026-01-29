@@ -17,15 +17,20 @@ EGGSHELL_A = 2.0  # x (anterior-posterior)
 EGGSHELL_B = 1.0  # y
 EGGSHELL_C = 1.0  # z
 
-# Cell radius for overlap detection
-CELL_RADIUS = 0.8
+# Initial cell radius (shrinks after each division)
+INITIAL_RADIUS = 0.9
 
 
-def divide_cell(parent: Cell, rule, lineage: CellLineage, next_id: int, dist=0.4):
+def divide_cell(parent: Cell, rule, lineage: CellLineage, next_id: int):
     """
     Divide parent cell into two daughters.
+    Daughter radius shrinks to conserve volume.
     """
     axis = lineage.resolve_division_axis(rule, parent.orientation)
+
+    # Separation distance based on parent radius
+    dist = parent.radius * 0.6
+    new_radius = parent.radius * Cell.DIVISION_RADIUS_FACTOR
 
     pos_a = parent.position + dist * axis
     pos_b = parent.position - dist * axis
@@ -34,12 +39,14 @@ def divide_cell(parent: Cell, rule, lineage: CellLineage, next_id: int, dist=0.4
         cell_id=next_id,
         name=rule.daughters[0],
         position=pos_a,
+        radius=new_radius,
         orientation=parent.orientation.copy(),
     )
     daughter_b = Cell(
         cell_id=next_id + 1,
         name=rule.daughters[1],
         position=pos_b,
+        radius=new_radius,
         orientation=parent.orientation.copy(),
     )
 
@@ -49,15 +56,16 @@ def divide_cell(parent: Cell, rule, lineage: CellLineage, next_id: int, dist=0.4
 def apply_constraints(cells, n_iter=10):
     """
     Apply overlap and eggshell constraints to all cells.
+    Uses each cell's individual radius.
     """
     cell_list = list(cells.values())
     positions = np.array([c.position for c in cell_list])
-    radii = np.full(len(cell_list), CELL_RADIUS)
+    radii = np.array([c.radius for c in cell_list])
 
     # Iteratively apply constraints
     for _ in range(n_iter):
         positions = project_overlap(positions, radii, n_iter=1)
-        positions = project_shell(positions, EGGSHELL_A, EGGSHELL_B, EGGSHELL_C)
+        positions = project_shell(positions, EGGSHELL_A, EGGSHELL_B, EGGSHELL_C, radii)
 
     # Update cell positions
     for i, cell in enumerate(cell_list):
@@ -69,13 +77,14 @@ def main():
 
     # Initial cell: P0 at origin
     next_id = 0
-    p0 = Cell(cell_id=next_id, name="P0", position=[0, 0, 0])
+    p0 = Cell(cell_id=next_id, name="P0", position=[0, 0, 0], radius=INITIAL_RADIUS)
     next_id += 1
 
     cells = {"P0": p0}
 
     print(f"Eggshell: a={EGGSHELL_A}, b={EGGSHELL_B}, c={EGGSHELL_C}")
-    print(f"Cell radius: {CELL_RADIUS}")
+    print(f"Initial radius: {INITIAL_RADIUS}")
+    print(f"Division factor: {Cell.DIVISION_RADIUS_FACTOR:.3f}")
     print()
     print("Initial state:")
     print(f"  {p0}")
@@ -114,7 +123,7 @@ def main():
 
         print(f"  After constraints: {len(cells)} cells")
         for name, cell in sorted(cells.items()):
-            print(f"    {name}: {cell.position.round(3)}")
+            print(f"    {name}: r={cell.radius:.3f}, pos={cell.position.round(3)}")
 
         print()
         step += 1

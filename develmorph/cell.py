@@ -10,22 +10,28 @@ class Cell:
         cell_id: Unique numeric identifier
         name: Biological name (e.g., "P0", "AB", "P1")
         position: 3D position vector
+        radius: Cell radius (shrinks after division to conserve volume)
         orientation: 3x3 orthonormal matrix [e1, e2, e3]
                      e1 = major axis, e2 = minor axis, e3 = e1 x e2
         next_division_step: Step at which this cell will divide (optional)
     """
+
+    # Volume-conserving radius factor: (1/2)^(1/3)
+    DIVISION_RADIUS_FACTOR = 0.5 ** (1/3)
 
     def __init__(
         self,
         cell_id: int,
         name: str,
         position,
+        radius: float = 1.0,
         orientation=None,
         next_division_step: Optional[int] = None,
     ):
         self.cell_id = cell_id
         self.name = name
         self.position = np.asarray(position, dtype=float)
+        self.radius = radius
 
         if orientation is None:
             self.orientation = np.eye(3)
@@ -35,4 +41,4 @@ class Cell:
         self.next_division_step = next_division_step
 
     def __repr__(self):
-        return f"Cell({self.name}, id={self.cell_id}, pos={self.position})"
+        return f"Cell({self.name}, r={self.radius:.3f}, pos={self.position})"
