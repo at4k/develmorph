@@ -69,7 +69,7 @@ def visualize_lineage_3d(df: pd.DataFrame):
     plt.show()
 
 
-def visualize_cells_3d(cells, title="Cell Division", show_orientation=True):
+def visualize_cells_3d(cells, title="Cell Division", show_orientation=True, eggshell=None):
     """
     Visualize cells in 3D with their orientations.
 
@@ -81,6 +81,8 @@ def visualize_cells_3d(cells, title="Cell Division", show_orientation=True):
         Plot title
     show_orientation : bool
         If True, draw arrows showing e1 (red), e2 (green), e3 (blue)
+    eggshell : tuple(a, b, c) or None
+        If provided, draw ellipsoidal eggshell with semi-axes (a, b, c)
     """
     import numpy as np
 
@@ -130,7 +132,10 @@ def visualize_cells_3d(cells, title="Cell Division", show_orientation=True):
                       length=arrow_length, color="blue", arrow_length_ratio=0.3)
 
     # Set equal aspect ratio
-    max_range = np.max(np.abs(positions)) + 0.5
+    if eggshell is not None:
+        max_range = max(eggshell) + 0.2
+    else:
+        max_range = np.max(np.abs(positions)) + 0.5
     ax.set_xlim(-max_range, max_range)
     ax.set_ylim(-max_range, max_range)
     ax.set_zlim(-max_range, max_range)
@@ -139,6 +144,16 @@ def visualize_cells_3d(cells, title="Cell Division", show_orientation=True):
     ax.set_ylabel("Y")
     ax.set_zlabel("Z")
     ax.set_title(title)
+
+    # Draw eggshell
+    if eggshell is not None:
+        a, b, c = eggshell
+        u = np.linspace(0, 2 * np.pi, 30)
+        v = np.linspace(0, np.pi, 20)
+        x = a * np.outer(np.cos(u), np.sin(v))
+        y = b * np.outer(np.sin(u), np.sin(v))
+        z = c * np.outer(np.ones_like(u), np.cos(v))
+        ax.plot_wireframe(x, y, z, color="gray", alpha=0.2, linewidth=0.5)
 
     # Legend for orientation
     if show_orientation:
