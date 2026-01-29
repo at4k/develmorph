@@ -1,5 +1,5 @@
 # C. elegans early embryo division program
-# P0 -> 4-cell stage
+# P0 -> 8-cell stage
 
 lineage_id: celegans_early
 
@@ -11,15 +11,41 @@ steps:
         axis: major_axis
         daughters: [AB, P1]
 
-  # 2-cell -> 4-cell (AB divides first, then P1)
+  # 2-cell -> 3-cell (AB divides)
   - step: 2
     divisions:
       - parent: AB
         axis: orthogonal_axis
         daughters: [ABa, ABp]
 
+  # 3-cell -> 4-cell (P1 divides)
   - step: 3
     divisions:
       - parent: P1
         axis: major_axis
         daughters: [EMS, P2]
+
+  # 4-cell -> 8-cell
+  - step: 4
+    divisions:
+      - parent: ABa
+        axis: minor_axis
+        daughters: [ABal, ABar]
+
+  - step: 5
+    divisions:
+      - parent: ABp
+        axis: minor_axis
+        daughters: [ABpl, ABpr]
+
+  - step: 6
+    divisions:
+      - parent: EMS
+        axis: major_axis
+        daughters: [MS, E]
+
+  - step: 7
+    divisions:
+      - parent: P2
+        axis: major_axis
+        daughters: [C, P3]
