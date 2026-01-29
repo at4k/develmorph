@@ -9,7 +9,7 @@ import numpy as np
 from develmorph.cell import Cell
 from develmorph.celllineage import CellLineage
 from develmorph.project import project_overlap, project_shell
-from develmorph.viz import visualize_cells_3d
+from develmorph.viz import visualize_cells_3d, visualize_timelapse_napari
 
 
 # Eggshell parameters (ellipsoid semi-axes)
@@ -82,6 +82,11 @@ def main():
 
     cells = {"P0": p0}
 
+    # Record history for timelapse visualization
+    history = []
+    history.append({name: Cell(c.cell_id, c.name, c.position.copy(), c.radius, c.orientation.copy())
+                    for name, c in cells.items()})
+
     print(f"Eggshell: a={EGGSHELL_A}, b={EGGSHELL_B}, c={EGGSHELL_C}")
     print(f"Initial radius: {INITIAL_RADIUS}")
     print(f"Division factor: {Cell.DIVISION_RADIUS_FACTOR:.3f}")
@@ -125,6 +130,10 @@ def main():
         for name, cell in sorted(cells.items()):
             print(f"    {name}: r={cell.radius:.3f}, pos={cell.position.round(3)}")
 
+        # Record state for timelapse
+        history.append({name: Cell(c.cell_id, c.name, c.position.copy(), c.radius, c.orientation.copy())
+                        for name, c in cells.items()})
+
         print()
         step += 1
 
@@ -133,10 +142,9 @@ def main():
     for name, cell in sorted(cells.items()):
         print(f"  {cell}")
 
-    # Visualize with eggshell
-    visualize_cells_3d(
-        cells,
-        title=f"C. elegans {len(cells)}-cell stage",
+    # Visualize timelapse with napari
+    visualize_timelapse_napari(
+        history,
         eggshell=(EGGSHELL_A, EGGSHELL_B, EGGSHELL_C),
     )
 

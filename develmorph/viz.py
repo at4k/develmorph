@@ -167,3 +167,85 @@ def visualize_cells_3d(cells, title="Cell Division", show_orientation=True, eggs
 
     plt.tight_layout()
     plt.show()
+
+
+def visualize_timelapse_napari(history, eggshell=None):
+    """
+    Visualize cell division timelapse using napari.
+
+    Parameters
+    ----------
+    history : list[dict[str, Cell]]
+        List of cell states at each step
+    eggshell : tuple(a, b, c) or None
+        Ellipsoid semi-axes for eggshell surface
+    """
+    import napari
+    import numpy as np
+
+    viewer = napari.Viewer(title="C. elegans Embryo Development")
+
+    # Prepare data for all timepoints
+    all_points = []
+    all_sizes = []
+    all_features = {"step": [], "name": []}
+
+    for step, cells in enumerate(history):
+        cell_list = list(cells.values())
+        for cell in cell_list:
+            all_points.append([step, cell.position[2], cell.position[1], cell.position[0]])
+            all_sizes.append(cell.radius * 2)
+            all_features["step"].append(step)
+            all_features["name"].append(cell.name)
+
+    all_points = np.array(all_points)
+    all_sizes = np.array(all_sizes)
+
+    # Add points layer with size and labels
+    viewer.add_points(
+        all_points,
+        size=all_sizes,
+        face_color="cyan",
+        border_color="blue",
+        border_width=0.05,
+        features=all_features,
+        text={
+            "string": "{name}",
+            "size": 10,
+            "color": "white",
+            "anchor": "center",
+        },
+        name="Cells",
+    )
+
+    # Add eggshell surface
+    if eggshell is not None:
+        a, b, c = eggshell
+        # Create ellipsoid mesh
+        u = np.linspace(0, 2 * np.pi, 40)
+        v = np.linspace(0, np.pi, 20)
+        x = a * np.outer(np.cos(u), np.sin(v))
+        y = b * np.outer(np.sin(u), np.sin(v))
+        z = c * np.outer(np.ones_like(u), np.cos(v))
+
+        # For each timepoint, add eggshell points
+        shell_points = []
+        for step in range(len(history)):
+            for i in range(x.shape[0]):
+                for j in range(x.shape[1]):
+                    shell_points.append([step, z[i, j], y[i, j], x[i, j]])
+
+        shell_points = np.array(shell_points)
+        viewer.add_points(
+            shell_points,
+            size=0.02,
+            face_color="gray",
+            opacity=0.1,
+            name="Eggshell",
+        )
+
+    # Set camera
+    viewer.dims.ndisplay = 3
+    viewer.camera.angles = (30, 30, 120)
+
+    napari.run()
