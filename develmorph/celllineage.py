@@ -1,20 +1,24 @@
-import yaml
-import numpy as np
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+import yaml
 
 
 @dataclass
 class DivisionRule:
     """A single division instruction."""
+
     parent: str
     axis: str  # major_axis, minor_axis, orthogonal_axis
     daughters: List[str]
+    volume_ratio: float = 0.5  # Fraction of volume going to first daughter (0.0-1.0)
 
 
 @dataclass
 class StepProgram:
     """All events happening at a given step."""
+
     step: int
     divisions: List[DivisionRule]
     fate: List[Dict[str, Any]]  # For future expansion
@@ -29,9 +33,9 @@ class CellLineage:
     """
 
     AXIS_MAP = {
-        "major_axis": 0,     # e1
-        "minor_axis": 1,     # e2
-        "orthogonal_axis": 2  # e3
+        "major_axis": 0,  # e1
+        "minor_axis": 1,  # e2
+        "orthogonal_axis": 2,  # e3
     }
 
     def __init__(self, yaml_path: str):
@@ -48,11 +52,14 @@ class CellLineage:
 
             divisions = []
             for div in step_data.get("divisions", []):
-                divisions.append(DivisionRule(
-                    parent=div["parent"],
-                    axis=div["axis"],
-                    daughters=div["daughters"],
-                ))
+                divisions.append(
+                    DivisionRule(
+                        parent=div["parent"],
+                        axis=div["axis"],
+                        daughters=div["daughters"],
+                        volume_ratio=div.get("volume_ratio", 0.5),
+                    )
+                )
 
             fate = step_data.get("fate", [])
 

@@ -1,51 +1,68 @@
 # C. elegans early embryo division program
 # P0 -> 8-cell stage
+#
+# Volume ratios reflect asymmetric cell divisions in C. elegans:
+# - P-lineage divisions are asymmetric (larger somatic + smaller germline)
+# - AB-lineage divisions are roughly symmetric
 
 lineage_id: celegans_early
 
 steps:
   # 1-cell -> 2-cell
+  # P0 divides asymmetrically: AB (anterior, larger) and P1 (posterior, smaller)
   - step: 1
     divisions:
       - parent: P0
         axis: major_axis
         daughters: [AB, P1]
+        volume_ratio: 0.6 # AB gets 60%, P1 gets 40%
 
   # 2-cell -> 3-cell (AB divides)
+  # AB divides symmetrically into ABa and ABp
   - step: 2
     divisions:
       - parent: AB
         axis: orthogonal_axis
         daughters: [ABa, ABp]
+        volume_ratio: 0.5 # Symmetric
 
   # 3-cell -> 4-cell (P1 divides)
+  # P1 divides asymmetrically: EMS (larger) and P2 (smaller)
   - step: 3
     divisions:
       - parent: P1
         axis: major_axis
         daughters: [EMS, P2]
+        volume_ratio: 0.6 # EMS gets 60%, P2 gets 40%
 
   # 4-cell -> 8-cell
+  # AB descendants divide symmetrically
   - step: 4
     divisions:
       - parent: ABa
         axis: minor_axis
         daughters: [ABal, ABar]
+        volume_ratio: 0.5 # Symmetric
 
   - step: 5
     divisions:
       - parent: ABp
         axis: minor_axis
         daughters: [ABpl, ABpr]
+        volume_ratio: 0.5 # Symmetric
 
+  # EMS divides asymmetrically: MS (larger) and E (smaller)
   - step: 6
     divisions:
       - parent: EMS
         axis: major_axis
         daughters: [MS, E]
+        volume_ratio: 0.55 # MS slightly larger
 
+  # P2 divides asymmetrically: C (larger) and P3 (smaller)
   - step: 7
     divisions:
       - parent: P2
         axis: major_axis
         daughters: [C, P3]
+        volume_ratio: 0.6 # C gets 60%, P3 gets 40%

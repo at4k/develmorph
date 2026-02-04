@@ -3,10 +3,9 @@
 import numpy as np
 import pytest
 
+from develmorph.cell import Cell
 from develmorph.celllineage import CellLineage, DivisionRule
 from develmorph.lineage_recorder import LineageRecorder
-from develmorph.cell import Cell
-
 
 YAML_PATH = "develmorph/lineages/celegans_early.yaml"
 
@@ -45,6 +44,33 @@ def test_celllineage_get_division_for_cell():
     assert rule is None
 
 
+def test_celllineage_volume_ratio():
+    """
+    Verify volume_ratio is correctly loaded from YAML.
+    """
+    lineage = CellLineage(YAML_PATH)
+
+    # P0 -> AB + P1: asymmetric (60:40)
+    rule = lineage.get_division_for_cell(step=1, cell_name="P0")
+    assert rule.volume_ratio == 0.6
+
+    # AB -> ABa + ABp: symmetric (50:50)
+    rule = lineage.get_division_for_cell(step=2, cell_name="AB")
+    assert rule.volume_ratio == 0.5
+
+    # P1 -> EMS + P2: asymmetric (60:40)
+    rule = lineage.get_division_for_cell(step=3, cell_name="P1")
+    assert rule.volume_ratio == 0.6
+
+
+def test_division_rule_default_volume_ratio():
+    """
+    Verify DivisionRule defaults to 0.5 volume_ratio.
+    """
+    rule = DivisionRule(parent="test", axis="major_axis", daughters=["A", "B"])
+    assert rule.volume_ratio == 0.5
+
+
 def test_celllineage_resolve_division_axis():
     """
     Verify division axis is correctly resolved from orientation.
@@ -78,11 +104,14 @@ def test_celllineage_resolve_axis_with_rotated_orientation():
     lineage = CellLineage(YAML_PATH)
 
     # Rotate 90 degrees around z-axis: e1 points to y, e2 points to -x
-    orientation = np.array([
-        [0, -1, 0],
-        [1,  0, 0],
-        [0,  0, 1],
-    ], dtype=float)
+    orientation = np.array(
+        [
+            [0, -1, 0],
+            [1, 0, 0],
+            [0, 0, 1],
+        ],
+        dtype=float,
+    )
 
     rule = DivisionRule(parent="P0", axis="major_axis", daughters=["A", "B"])
     axis = lineage.resolve_division_axis(rule, orientation)
@@ -215,15 +244,15 @@ def test_full_division_simulation_with_recorder():
 
         step += 1
 
-    # Verify final cell count
-    assert len(cells) == 4
-    assert set(cells.keys()) == {"ABa", "ABp", "EMS", "P2"}
+    # Verify final cell count (8-cell stage)
+    assert len(cells) == 8
+    assert set(cells.keys()) == {"ABal", "ABar", "ABpl", "ABpr", "MS", "E", "C", "P3"}
 
     # Verify recorder captured history
     df = recorder.to_dataframe()
     assert len(df) > 0
     assert set(df.columns) >= {"step", "cell_id", "x", "y", "z", "divided"}
 
-    # Check steps are recorded
+    # Check steps are recorded (0 through 7)
     steps_recorded = sorted(df["step"].unique())
-    assert steps_recorded == [0, 1, 2, 3]
+    assert steps_recorded == [0, 1, 2, 3, 4, 5, 6, 7]
