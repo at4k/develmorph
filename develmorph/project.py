@@ -1,66 +1,46 @@
 import numpy as np
 
 
-def project_overlap(positions, radii, n_iter=5):
+class CollisionConstraint:
     """
-    Iteratively remove overlaps between cells.
-    """
+    XPBD inequality constraint: |p_i - p_j| >= rest_length.
 
-    x = positions.copy()
-    n = len(x)
-
-    for _ in range(n_iter):
-
-        for i in range(n):
-            for j in range(i + 1, n):
-
-                dx = x[i] - x[j]
-                dist = np.linalg.norm(dx)
-
-                if dist < 1e-12:
-                    continue
-
-                R = radii[i] + radii[j]
-
-                if dist < R:
-
-                    nvec = dx / dist
-                    delta = 0.5 * (R - dist)
-
-                    x[i] += delta * nvec
-                    x[j] -= delta * nvec
-
-    return x
-
-
-def project_shell(positions, a=5.0, b=5.0, c=5.0, radii=None):
-    """
-    Project cells inside an ellipsoidal shell.
-
-    If radii is provided, ensures cell surface (not just center)
-    stays inside the shell.
+    Only applies correction when particles overlap (C < 0).
+    Modifies positions in-place.
     """
 
-    x = positions.copy()
+    def __init__(self, i: int, j: int, rest_length: float, compliance: float = 0.0):
+        self.i = i
+        self.j = j
+        self.rest_length = rest_length
+        self.compliance = compliance
 
-    for i in range(len(x)):
+    def project(self, x, inv_masses, dt, lambda_acc):
+        dx = x[self.i] - x[self.j]
+        dist = np.linalg.norm(dx)
 
-        v = x[i]
+        if dist < 1e-12:
+            return lambda_acc
 
-        # Shrink effective shell by cell radius
-        if radii is not None:
-            r = radii[i]
-            ea = max(a - r, 0.1)
-            eb = max(b - r, 0.1)
-            ec = max(c - r, 0.1)
-        else:
-            ea, eb, ec = a, b, c
+        C = dist - self.rest_length
 
-        s = (v[0] ** 2) / (ea * ea) + (v[1] ** 2) / (eb * eb) + (v[2] ** 2) / (ec * ec)
+        # Inequality: only correct overlap (C < 0)
+        if C >= 0.0:
+            return lambda_acc
 
-        if s > 1.0:
+        grad = dx / dist
+        w_sum = inv_masses[self.i] + inv_masses[self.j]
 
-            scale = 1.0 / np.sqrt(s)
-            x[i] *= scale
+        alpha_tilde = self.compliance / (dt * dt) if dt > 0 else 0.0
 
-    return x
+        denom = w_sum + alpha_tilde
+        if denom < 1e-12:
+            return lambda_acc
+
+        delta_lambda = (-C - alpha_tilde * lambda_acc) / denom
+        lambda_acc += delta_lambda
+
+        x[self.i] += delta_lambda * inv_masses[self.i] * grad
+        x[self.j] -= delta_lambda * inv_masses[self.j] * grad
+
+        return lambda_acc
