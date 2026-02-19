@@ -6,11 +6,11 @@ Cells are constrained inside an ellipsoidal eggshell and overlaps are resolved.
 """
 
 import numpy as np
+
 from develmorph.cell import Cell
 from develmorph.celllineage import CellLineage
-from develmorph.project import project_overlap, project_shell
+from develmorph.solver import step as xpbd_step
 from develmorph.viz import visualize_cells_3d, visualize_timelapse_napari
-
 
 # Eggshell parameters (ellipsoid semi-axes)
 EGGSHELL_A = 2.0  # x (anterior-posterior)
@@ -55,19 +55,24 @@ def divide_cell(parent: Cell, rule, lineage: CellLineage, next_id: int):
 
 def apply_constraints(cells, n_iter=10):
     """
-    Apply overlap and eggshell constraints to all cells.
-    Uses each cell's individual radius.
+    Apply XPBD constraints to all cells.
     """
     cell_list = list(cells.values())
     positions = np.array([c.position for c in cell_list])
     radii = np.array([c.radius for c in cell_list])
+    velocities = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
 
-    # Iteratively apply constraints
-    for _ in range(n_iter):
-        positions = project_overlap(positions, radii, n_iter=1)
-        positions = project_shell(positions, EGGSHELL_A, EGGSHELL_B, EGGSHELL_C, radii)
+    positions, _ = xpbd_step(
+        positions,
+        velocities,
+        inv_masses,
+        radii,
+        dt=0.01,
+        shell_params=(EGGSHELL_A, EGGSHELL_B, EGGSHELL_C),
+        n_iter=n_iter,
+    )
 
-    # Update cell positions
     for i, cell in enumerate(cell_list):
         cell.position = positions[i]
 
@@ -84,8 +89,14 @@ def main():
 
     # Record history for timelapse visualization
     history = []
-    history.append({name: Cell(c.cell_id, c.name, c.position.copy(), c.radius, c.orientation.copy())
-                    for name, c in cells.items()})
+    history.append(
+        {
+            name: Cell(
+                c.cell_id, c.name, c.position.copy(), c.radius, c.orientation.copy()
+            )
+            for name, c in cells.items()
+        }
+    )
 
     print(f"Eggshell: a={EGGSHELL_A}, b={EGGSHELL_B}, c={EGGSHELL_C}")
     print(f"Initial radius: {INITIAL_RADIUS}")
@@ -102,8 +113,7 @@ def main():
             break
 
         divisions_to_execute = [
-            rule for rule in program.divisions
-            if rule.parent in cells
+            rule for rule in program.divisions if rule.parent in cells
         ]
 
         if not divisions_to_execute:
@@ -131,8 +141,14 @@ def main():
             print(f"    {name}: r={cell.radius:.3f}, pos={cell.position.round(3)}")
 
         # Record state for timelapse
-        history.append({name: Cell(c.cell_id, c.name, c.position.copy(), c.radius, c.orientation.copy())
-                        for name, c in cells.items()})
+        history.append(
+            {
+                name: Cell(
+                    c.cell_id, c.name, c.position.copy(), c.radius, c.orientation.copy()
+                )
+                for name, c in cells.items()
+            }
+        )
 
         print()
         step += 1
