@@ -1,0 +1,167 @@
+import math
+
+import numpy as np
+
+# Octahedron: 6 vertices along +/-x, +/-y, +/-z axes
+OCTAHEDRON_DIRS = np.array(
+    [
+        [1.0, 0.0, 0.0],  # 0: +x
+        [-1.0, 0.0, 0.0],  # 1: -x
+        [0.0, 1.0, 0.0],  # 2: +y
+        [0.0, -1.0, 0.0],  # 3: -y
+        [0.0, 0.0, 1.0],  # 4: +z
+        [0.0, 0.0, -1.0],  # 5: -z
+    ]
+)
+
+# 8 triangular faces of the octahedron (indices into surface points 0-5)
+# Oriented so normals point outward
+OCTAHEDRON_TRIANGLES = [
+    (0, 2, 4),  # +x, +y, +z
+    (0, 4, 3),  # +x, +z, -y
+    (0, 3, 5),  # +x, -y, -z
+    (0, 5, 2),  # +x, -z, +y
+    (1, 4, 2),  # -x, +z, +y
+    (1, 3, 4),  # -x, -y, +z
+    (1, 5, 3),  # -x, -z, -y
+    (1, 2, 5),  # -x, +y, -z
+]
+
+# 12 edges of the octahedron (surface-surface)
+OCTAHEDRON_EDGES = [
+    (0, 2),
+    (0, 3),
+    (0, 4),
+    (0, 5),  # +x to equator
+    (1, 2),
+    (1, 3),
+    (1, 4),
+    (1, 5),  # -x to equator
+    (2, 4),
+    (4, 3),
+    (3, 5),
+    (5, 2),  # equator ring
+]
+
+
+class CellBody:
+    """
+    A cell represented as center point + 6 octahedron surface points.
+
+    All indices refer to positions in the flat particle array.
+    """
+
+    def __init__(
+        self, center_idx, surface_indices, target_volume, membrane_compliance=0.01
+    ):
+        self.center_idx = center_idx
+        self.surface_indices = list(surface_indices)
+        self.triangles = OCTAHEDRON_TRIANGLES
+        self.target_volume = target_volume
+        self.membrane_compliance = membrane_compliance
+
+        # Edges for distance constraints
+        self.center_surface_edges = [(center_idx, si) for si in surface_indices]
+        self.surface_surface_edges = [
+            (surface_indices[a], surface_indices[b]) for a, b in OCTAHEDRON_EDGES
+        ]
+
+    def all_indices(self):
+        """Return all particle indices belonging to this cell."""
+        return [self.center_idx] + self.surface_indices
+
+    def surface_global_triangles(self):
+        """Return triangles with global particle indices."""
+        return [
+            (self.surface_indices[a], self.surface_indices[b], self.surface_indices[c])
+            for a, b, c in self.triangles
+        ]
+
+
+def create_cell_body(center, radius, positions, membrane_compliance=0.01):
+    """
+    Create a CellBody and append its particles to the positions array.
+
+    Args:
+        center: (3,) center position
+        radius: cell radius
+        positions: existing (N, 3) positions array to append to
+        membrane_compliance: membrane softness
+
+    Returns:
+        (cell_body, new_positions): CellBody and updated positions array
+    """
+    center = np.asarray(center, dtype=float)
+    n = len(positions)
+
+    # Center point
+    center_idx = n
+    new_points = [center]
+
+    # Surface points
+    surface_indices = []
+    for i, d in enumerate(OCTAHEDRON_DIRS):
+        surface_indices.append(n + 1 + i)
+        new_points.append(center + radius * d)
+
+    target_volume = (4.0 / 3.0) * math.pi * radius**3
+
+    if len(positions) == 0:
+        new_positions = np.array(new_points)
+    else:
+        new_positions = np.vstack([positions, new_points])
+
+    cell_body = CellBody(
+        center_idx=center_idx,
+        surface_indices=surface_indices,
+        target_volume=target_volume,
+        membrane_compliance=membrane_compliance,
+    )
+
+    return cell_body, new_positions
+
+
+def build_particle_arrays(cell_bodies, positions):
+    """
+    Rebuild flat arrays from a list of CellBodies using current positions.
+
+    Repacks particles contiguously and reassigns all indices.
+
+    Args:
+        cell_bodies: list of CellBody
+        positions: current (M, 3) positions array
+
+    Returns:
+        (new_positions, new_inv_masses): repacked flat arrays
+    """
+    new_positions = []
+    new_inv_masses = []
+    idx = 0
+
+    for cb in cell_bodies:
+        # Collect current positions for this cell
+        old_center = positions[cb.center_idx]
+        old_surfaces = [positions[si] for si in cb.surface_indices]
+
+        # Reassign indices
+        cb.center_idx = idx
+        new_positions.append(old_center)
+        new_inv_masses.append(1.0)
+        idx += 1
+
+        new_surface_indices = []
+        for sp in old_surfaces:
+            new_surface_indices.append(idx)
+            new_positions.append(sp)
+            new_inv_masses.append(1.0)
+            idx += 1
+
+        cb.surface_indices = new_surface_indices
+
+        # Rebuild edge lists with new indices
+        cb.center_surface_edges = [(cb.center_idx, si) for si in cb.surface_indices]
+        cb.surface_surface_edges = [
+            (cb.surface_indices[a], cb.surface_indices[b]) for a, b in OCTAHEDRON_EDGES
+        ]
+
+    return np.array(new_positions), np.array(new_inv_masses)
