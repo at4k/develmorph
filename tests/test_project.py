@@ -1,6 +1,14 @@
+import math
+
 import numpy as np
 
-from develmorph.project import CollisionConstraint, DistanceConstraint, ShellConstraint
+from develmorph.cell_body import create_cell_body
+from develmorph.project import (
+    CollisionConstraint,
+    DistanceConstraint,
+    ShellConstraint,
+    VolumeConstraint,
+)
 
 
 def test_collision_resolves_overlap():
@@ -207,3 +215,108 @@ def test_distance_compliance_allows_deviation():
     err_soft = abs(np.linalg.norm(x_soft[0] - x_soft[1]) - 1.0)
 
     assert err_hard < err_soft
+
+
+def _make_test_cell(center, radius):
+    """Helper: create a single CellBody and return (cell_body, positions, inv_masses)."""
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=np.array(center), radius=radius, positions=positions
+    )
+    inv_masses = np.ones(len(positions))
+    return cb, positions, inv_masses
+
+
+def test_volume_no_correction_at_target():
+    """No correction when volume equals target."""
+    cb, x, inv_masses = _make_test_cell([0.0, 0.0, 0.0], 1.0)
+    dt = 0.01
+
+    c = VolumeConstraint(
+        center_idx=cb.center_idx,
+        surface_indices=cb.surface_indices,
+        triangles=cb.surface_global_triangles(),
+        target_volume=cb.target_volume,
+        compliance=0.0,
+    )
+    x_before = x.copy()
+    c.project(x, inv_masses, dt, 0.0)
+
+    assert np.allclose(x, x_before, atol=0.05)
+
+
+def test_volume_inflates_when_deflated():
+    """Deflated cell inflates back toward target volume."""
+    cb, x, inv_masses = _make_test_cell([0.0, 0.0, 0.0], 1.0)
+    dt = 0.01
+
+    center = x[cb.center_idx]
+    for si in cb.surface_indices:
+        x[si] = center + (x[si] - center) * 0.5
+
+    c = VolumeConstraint(
+        center_idx=cb.center_idx,
+        surface_indices=cb.surface_indices,
+        triangles=cb.surface_global_triangles(),
+        target_volume=cb.target_volume,
+        compliance=0.0,
+    )
+
+    lambda_acc = 0.0
+    for _ in range(20):
+        lambda_acc = c.project(x, inv_masses, dt, lambda_acc)
+
+    for si in cb.surface_indices:
+        dist = np.linalg.norm(x[si] - center)
+        assert dist > 0.5
+
+
+def test_volume_deflates_when_inflated():
+    """Inflated cell deflates back toward target volume."""
+    cb, x, inv_masses = _make_test_cell([0.0, 0.0, 0.0], 1.0)
+    dt = 0.01
+
+    center = x[cb.center_idx]
+    for si in cb.surface_indices:
+        x[si] = center + (x[si] - center) * 2.0
+
+    c = VolumeConstraint(
+        center_idx=cb.center_idx,
+        surface_indices=cb.surface_indices,
+        triangles=cb.surface_global_triangles(),
+        target_volume=cb.target_volume,
+        compliance=0.0,
+    )
+
+    lambda_acc = 0.0
+    for _ in range(20):
+        lambda_acc = c.project(x, inv_masses, dt, lambda_acc)
+
+    for si in cb.surface_indices:
+        dist = np.linalg.norm(x[si] - center)
+        assert dist < 2.0
+
+
+def test_volume_bulge_when_pushed():
+    """When pushed from one side, cell bulges on the other side to conserve volume."""
+    cb, x, inv_masses = _make_test_cell([0.0, 0.0, 0.0], 1.0)
+    dt = 0.01
+
+    # Push +x surface point inward
+    x[cb.surface_indices[0]] = np.array([0.3, 0.0, 0.0])
+
+    c = VolumeConstraint(
+        center_idx=cb.center_idx,
+        surface_indices=cb.surface_indices,
+        triangles=cb.surface_global_triangles(),
+        target_volume=cb.target_volume,
+        compliance=0.0,
+    )
+
+    lambda_acc = 0.0
+    for _ in range(20):
+        lambda_acc = c.project(x, inv_masses, dt, lambda_acc)
+
+    # -x point should have moved outward to compensate
+    dist_neg_x = np.linalg.norm(x[cb.surface_indices[1]] - x[cb.center_idx])
+    assert dist_neg_x > 1.0
