@@ -1,6 +1,6 @@
 import numpy as np
 
-from develmorph.project import CollisionConstraint, ShellConstraint
+from develmorph.project import CollisionConstraint, DistanceConstraint, ShellConstraint
 
 
 def test_collision_resolves_overlap():
@@ -143,3 +143,67 @@ def test_shell_ellipsoid_axes():
 
     val = (x[0, 1] / 2.0) ** 2
     assert val <= 1.01
+
+
+def test_distance_contracts_when_stretched():
+    """Stretched pair is pulled back together."""
+    x = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    inv_masses = np.array([1.0, 1.0])
+    dt = 0.01
+
+    c = DistanceConstraint(i=0, j=1, rest_length=1.0, compliance=0.0)
+    lambda_acc = 0.0
+
+    for _ in range(10):
+        lambda_acc = c.project(x, inv_masses, dt, lambda_acc)
+
+    dist = np.linalg.norm(x[0] - x[1])
+    assert abs(dist - 1.0) < 0.05
+
+
+def test_distance_expands_when_compressed():
+    """Compressed pair is pushed apart."""
+    x = np.array([[0.0, 0.0, 0.0], [0.3, 0.0, 0.0]])
+    inv_masses = np.array([1.0, 1.0])
+    dt = 0.01
+
+    c = DistanceConstraint(i=0, j=1, rest_length=1.0, compliance=0.0)
+    lambda_acc = 0.0
+
+    for _ in range(10):
+        lambda_acc = c.project(x, inv_masses, dt, lambda_acc)
+
+    dist = np.linalg.norm(x[0] - x[1])
+    assert abs(dist - 1.0) < 0.05
+
+
+def test_distance_preserves_midpoint():
+    """Equal-mass correction preserves midpoint."""
+    x = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    inv_masses = np.array([1.0, 1.0])
+    dt = 0.01
+
+    c = DistanceConstraint(i=0, j=1, rest_length=1.0, compliance=0.0)
+    c.project(x, inv_masses, dt, 0.0)
+
+    midpoint = (x[0] + x[1]) / 2
+    assert np.allclose(midpoint, [1.0, 0.0, 0.0])
+
+
+def test_distance_compliance_allows_deviation():
+    """Higher compliance allows more deviation from rest length."""
+    x_hard = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    x_soft = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    inv_masses = np.array([1.0, 1.0])
+    dt = 0.01
+
+    c_hard = DistanceConstraint(i=0, j=1, rest_length=1.0, compliance=0.0)
+    c_soft = DistanceConstraint(i=0, j=1, rest_length=1.0, compliance=1.0)
+
+    c_hard.project(x_hard, inv_masses, dt, 0.0)
+    c_soft.project(x_soft, inv_masses, dt, 0.0)
+
+    err_hard = abs(np.linalg.norm(x_hard[0] - x_hard[1]) - 1.0)
+    err_soft = abs(np.linalg.norm(x_soft[0] - x_soft[1]) - 1.0)
+
+    assert err_hard < err_soft
