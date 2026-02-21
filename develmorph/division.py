@@ -1,61 +1,61 @@
 import numpy as np
 
+from develmorph.cell_body import create_cell_body
 
-def divide_cell(positions, radii, idx, axis=None, volume_ratio=0.5):
+
+def divide_cell_body(parent, positions, axis=None, volume_ratio=0.5):
     """
-    Divide one cell into two with optional asymmetric volume distribution.
+    Divide a CellBody into two daughters.
+
+    Removes parent particles and creates two new CellBodies with
+    octahedron surface points. Volume is distributed according to
+    volume_ratio.
 
     Args:
-        positions: Array of cell positions
-        radii: Array of cell radii
-        idx: Index of cell to divide
-        axis: Division axis (unit vector). If None, random axis is used.
-        volume_ratio: Fraction of parent volume going to first daughter (0.0-1.0).
-                      Default 0.5 for symmetric division.
-                      E.g., 0.6 means first daughter gets 60% of volume.
+        parent: CellBody to divide
+        positions: (N, 3) particle positions array
+        axis: division axis (unit vector). Random if None.
+        volume_ratio: fraction of volume for first daughter (0.0-1.0)
 
     Returns:
-        new_positions: Updated positions array with daughter cells
-        new_radii: Updated radii array with daughter cells
+        (daughters, new_positions): list of 2 CellBodies and updated positions
     """
-    x = positions[idx]
-    r = radii[idx]
-
     if axis is None:
-        v = np.random.randn(3)
-        v /= np.linalg.norm(v)
-    else:
-        v = axis / np.linalg.norm(axis)
+        axis = np.random.randn(3)
+    axis = axis / np.linalg.norm(axis)
 
-    # Calculate daughter radii from volume ratio
-    # V_parent = (4/3) * pi * r^3
-    # V1 = volume_ratio * V_parent
-    # V2 = (1 - volume_ratio) * V_parent
-    # r1 = r * volume_ratio^(1/3)
-    # r2 = r * (1 - volume_ratio)^(1/3)
-    r1 = r * (volume_ratio ** (1 / 3))
-    r2 = r * ((1 - volume_ratio) ** (1 / 3))
+    parent_center = positions[parent.center_idx].copy()
+    parent_volume = parent.target_volume
 
-    # Position daughters along axis, offset by their radii
-    # First daughter in positive direction, second in negative
-    eps1 = 0.6 * r1
-    eps2 = 0.6 * r2
+    # Octahedron volume: V = (4/3) * r^3, so r = (3V/4)^(1/3)
+    parent_radius = (3.0 * parent_volume / 4.0) ** (1.0 / 3.0)
 
-    x1 = x + eps1 * v
-    x2 = x - eps2 * v
+    # Daughter radii from volume ratio
+    r1 = parent_radius * (volume_ratio ** (1.0 / 3.0))
+    r2 = parent_radius * ((1.0 - volume_ratio) ** (1.0 / 3.0))
 
-    new_positions = []
-    new_radii = []
+    # Daughter centers along axis
+    offset1 = 0.6 * r1
+    offset2 = 0.6 * r2
+    center1 = parent_center + offset1 * axis
+    center2 = parent_center - offset2 * axis
 
-    for i in range(len(positions)):
-        if i == idx:
-            new_positions.append(x1)
-            new_positions.append(x2)
+    # Remove parent particles from positions array
+    parent_indices = sorted(parent.all_indices(), reverse=True)
+    positions = np.delete(positions, parent_indices, axis=0)
 
-            new_radii.append(r1)
-            new_radii.append(r2)
-        else:
-            new_positions.append(positions[i])
-            new_radii.append(radii[i])
+    # Create daughters (appending to cleaned positions)
+    d1, positions = create_cell_body(
+        center=center1,
+        radius=r1,
+        positions=positions,
+        membrane_compliance=parent.membrane_compliance,
+    )
+    d2, positions = create_cell_body(
+        center=center2,
+        radius=r2,
+        positions=positions,
+        membrane_compliance=parent.membrane_compliance,
+    )
 
-    return np.array(new_positions), np.array(new_radii)
+    return [d1, d2], positions
