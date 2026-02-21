@@ -104,12 +104,19 @@ def create_cell_body(center, radius, positions, membrane_compliance=0.01):
         surface_indices.append(n + 1 + i)
         new_points.append(center + radius * d)
 
-    target_volume = (4.0 / 3.0) * math.pi * radius**3
-
     if len(positions) == 0:
         new_positions = np.array(new_points)
     else:
         new_positions = np.vstack([positions, new_points])
+
+    # Compute target volume from actual mesh geometry
+    target_volume = 0.0
+    for a, b, c in OCTAHEDRON_TRIANGLES:
+        p0 = new_positions[surface_indices[a]]
+        p1 = new_positions[surface_indices[b]]
+        p2 = new_positions[surface_indices[c]]
+        target_volume += np.dot(p0, np.cross(p1, p2))
+    target_volume /= 6.0
 
     cell_body = CellBody(
         center_idx=center_idx,

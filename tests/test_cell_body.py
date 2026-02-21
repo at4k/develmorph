@@ -1,6 +1,7 @@
 import math
 
 import numpy as np
+
 from develmorph.cell_body import CellBody, build_particle_arrays, create_cell_body
 
 
@@ -42,7 +43,7 @@ def test_create_cell_body_triangle_count():
 
 
 def test_create_cell_body_target_volume():
-    """Target volume equals 4/3 * pi * r^3."""
+    """Target volume equals octahedron mesh volume (4/3 * r^3)."""
     positions = np.zeros((0, 3))
     r = 1.5
     cb, positions = create_cell_body(
@@ -50,7 +51,8 @@ def test_create_cell_body_target_volume():
         radius=r,
         positions=positions,
     )
-    expected = (4.0 / 3.0) * math.pi * r**3
+    # Regular octahedron with vertices at distance r: V = (4/3) * r^3
+    expected = (4.0 / 3.0) * r**3
     assert abs(cb.target_volume - expected) < 1e-10
 
 
