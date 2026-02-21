@@ -157,7 +157,7 @@ def test_solver_surface_cell_deforms_on_collision():
     """Cell deforms (surface points shift) when pushed against shell boundary."""
     positions = np.zeros((0, 3))
     cb, positions = create_cell_body(
-        center=np.array([4.0, 0.0, 0.0]), radius=1.0, positions=positions
+        center=np.array([4.5, 0.0, 0.0]), radius=1.0, positions=positions
     )
     vel = np.zeros_like(positions)
     inv_masses = np.ones(len(positions))
@@ -173,8 +173,10 @@ def test_solver_surface_cell_deforms_on_collision():
     )
 
     center = new_pos[cb.center_idx]
-    dist_plus_x = np.linalg.norm(new_pos[cb.surface_indices[0]] - center)
     dist_minus_x = np.linalg.norm(new_pos[cb.surface_indices[1]] - center)
+    dist_plus_y = np.linalg.norm(new_pos[cb.surface_indices[2]] - center)
 
-    # +x side compressed or -x side expanded
-    assert dist_plus_x < 1.0 or dist_minus_x > 1.0
+    # Shell pushes center inward, compressing -x side;
+    # volume constraint expands lateral (y/z) sides to compensate
+    assert dist_minus_x < 1.0
+    assert dist_plus_y > 1.0
