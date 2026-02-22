@@ -265,7 +265,7 @@ def visualize_timelapse_napari(
             surf_points = np.array(surf_points)
             viewer.add_points(
                 surf_points,
-                size=0.05,
+                size=0.15,
                 face_color="yellow",
                 opacity=0.8,
                 name="Surface Points",
@@ -289,7 +289,7 @@ def visualize_timelapse_napari(
                 adh_lines,
                 shape_type="line",
                 edge_color="orange",
-                edge_width=0.03,
+                edge_width=0.08,
                 opacity=0.9,
                 name="Adhesion",
             )
