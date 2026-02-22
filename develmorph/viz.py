@@ -265,32 +265,33 @@ def visualize_timelapse_napari(
             surf_points = np.array(surf_points)
             viewer.add_points(
                 surf_points,
-                size=0.15,
+                size=0.08,
                 face_color="yellow",
-                opacity=0.8,
+                border_color="yellow",
+                border_width=0.0,
+                opacity=1.0,
                 name="Surface Points",
             )
 
     # Adhesion lines (connecting centers of adhered cells)
+    # Use add_vectors for 3D visibility (add_shapes lines are 2D only)
     if adhesion_history is not None:
-        adh_lines = []
+        vec_origins = []
+        vec_dirs = []
         for step, pairs in enumerate(adhesion_history):
             for ca, cb in pairs:
-                adh_lines.append(
-                    np.array(
-                        [
-                            [step, ca[2], ca[1], ca[0]],
-                            [step, cb[2], cb[1], cb[0]],
-                        ]
-                    )
-                )
-        if adh_lines:
-            viewer.add_shapes(
-                adh_lines,
-                shape_type="line",
+                origin = np.array([step, ca[2], ca[1], ca[0]])
+                target = np.array([step, cb[2], cb[1], cb[0]])
+                vec_origins.append(origin)
+                vec_dirs.append(target - origin)
+        if vec_origins:
+            vec_data = np.stack([vec_origins, vec_dirs], axis=1)
+            viewer.add_vectors(
+                vec_data,
                 edge_color="orange",
-                edge_width=0.08,
-                opacity=0.9,
+                edge_width=0.05,
+                length=1.0,
+                opacity=1.0,
                 name="Adhesion",
             )
 
