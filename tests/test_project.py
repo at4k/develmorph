@@ -4,6 +4,7 @@ import numpy as np
 
 from develmorph.cell_body import create_cell_body
 from develmorph.project import (
+    AdhesionConstraint,
     CollisionConstraint,
     DistanceConstraint,
     ShellConstraint,
@@ -320,3 +321,70 @@ def test_volume_bulge_when_pushed():
     # -x point should have moved outward to compensate
     dist_neg_x = np.linalg.norm(x[cb.surface_indices[1]] - x[cb.center_idx])
     assert dist_neg_x > 1.0
+
+
+# --- AdhesionConstraint tests ---
+
+
+def test_adhesion_pulls_back_when_separated():
+    """Separated pair is pulled back to rest length (attraction)."""
+    x = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    inv_masses = np.array([1.0, 1.0])
+    dt = 0.01
+
+    c = AdhesionConstraint(i=0, j=1, rest_length=1.0, compliance=0.0)
+    lambda_acc = 0.0
+
+    for _ in range(10):
+        lambda_acc = c.project(x, inv_masses, dt, lambda_acc)
+
+    dist = np.linalg.norm(x[0] - x[1])
+    assert abs(dist - 1.0) < 0.05
+
+
+def test_adhesion_pushes_apart_when_overlapping():
+    """Overlapping pair is pushed apart to rest length (repulsion)."""
+    x = np.array([[0.0, 0.0, 0.0], [0.3, 0.0, 0.0]])
+    inv_masses = np.array([1.0, 1.0])
+    dt = 0.01
+
+    c = AdhesionConstraint(i=0, j=1, rest_length=1.0, compliance=0.0)
+    lambda_acc = 0.0
+
+    for _ in range(10):
+        lambda_acc = c.project(x, inv_masses, dt, lambda_acc)
+
+    dist = np.linalg.norm(x[0] - x[1])
+    assert abs(dist - 1.0) < 0.05
+
+
+def test_adhesion_no_correction_at_rest():
+    """No correction when at rest length."""
+    x = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    inv_masses = np.array([1.0, 1.0])
+    dt = 0.01
+
+    c = AdhesionConstraint(i=0, j=1, rest_length=1.0, compliance=0.0)
+    x_before = x.copy()
+    c.project(x, inv_masses, dt, 0.0)
+
+    assert np.allclose(x, x_before, atol=1e-6)
+
+
+def test_adhesion_compliance_softens():
+    """Higher compliance allows more deviation from rest length."""
+    x_hard = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    x_soft = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+    inv_masses = np.array([1.0, 1.0])
+    dt = 0.01
+
+    c_hard = AdhesionConstraint(i=0, j=1, rest_length=1.0, compliance=0.0)
+    c_soft = AdhesionConstraint(i=0, j=1, rest_length=1.0, compliance=1.0)
+
+    c_hard.project(x_hard, inv_masses, dt, 0.0)
+    c_soft.project(x_soft, inv_masses, dt, 0.0)
+
+    err_hard = abs(np.linalg.norm(x_hard[0] - x_hard[1]) - 1.0)
+    err_soft = abs(np.linalg.norm(x_soft[0] - x_soft[1]) - 1.0)
+
+    assert err_hard < err_soft
