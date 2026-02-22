@@ -191,14 +191,7 @@ def main():
         for name, cell in sorted(cells.items()):
             print(f"    {name}: r={cell.radius:.3f}, pos={cell.position.round(3)}")
 
-        history.append(
-            {
-                name: Cell(
-                    c.cell_id, c.name, c.position.copy(), c.radius, c.orientation.copy()
-                )
-                for name, c in cells.items()
-            }
-        )
+        record_snapshot()
 
         print()
         step_num += 1
