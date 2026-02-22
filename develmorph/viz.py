@@ -2,8 +2,9 @@
 # Phase2-A: 3D visualization of developmental time series
 
 from __future__ import annotations
-import pandas as pd
+
 import matplotlib.pyplot as plt
+import pandas as pd
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
 
@@ -69,7 +70,9 @@ def visualize_lineage_3d(df: pd.DataFrame):
     plt.show()
 
 
-def visualize_cells_3d(cells, title="Cell Division", show_orientation=True, eggshell=None):
+def visualize_cells_3d(
+    cells, title="Cell Division", show_orientation=True, eggshell=None
+):
     """
     Visualize cells in 3D with their orientations.
 
@@ -115,21 +118,45 @@ def visualize_cells_3d(cells, title="Cell Division", show_orientation=True, eggs
         if show_orientation:
             # e1 (major axis) - red
             e1 = cell.orientation[:, 0]
-            ax.quiver(pos[0], pos[1], pos[2],
-                      e1[0], e1[1], e1[2],
-                      length=arrow_length, color="red", arrow_length_ratio=0.3)
+            ax.quiver(
+                pos[0],
+                pos[1],
+                pos[2],
+                e1[0],
+                e1[1],
+                e1[2],
+                length=arrow_length,
+                color="red",
+                arrow_length_ratio=0.3,
+            )
 
             # e2 (minor axis) - green
             e2 = cell.orientation[:, 1]
-            ax.quiver(pos[0], pos[1], pos[2],
-                      e2[0], e2[1], e2[2],
-                      length=arrow_length, color="green", arrow_length_ratio=0.3)
+            ax.quiver(
+                pos[0],
+                pos[1],
+                pos[2],
+                e2[0],
+                e2[1],
+                e2[2],
+                length=arrow_length,
+                color="green",
+                arrow_length_ratio=0.3,
+            )
 
             # e3 (orthogonal) - blue
             e3 = cell.orientation[:, 2]
-            ax.quiver(pos[0], pos[1], pos[2],
-                      e3[0], e3[1], e3[2],
-                      length=arrow_length, color="blue", arrow_length_ratio=0.3)
+            ax.quiver(
+                pos[0],
+                pos[1],
+                pos[2],
+                e3[0],
+                e3[1],
+                e3[2],
+                length=arrow_length,
+                color="blue",
+                arrow_length_ratio=0.3,
+            )
 
     # Set equal aspect ratio
     if eggshell is not None:
@@ -158,6 +185,7 @@ def visualize_cells_3d(cells, title="Cell Division", show_orientation=True, eggs
     # Legend for orientation
     if show_orientation:
         from matplotlib.lines import Line2D
+
         legend_elements = [
             Line2D([0], [0], color="red", label="e1 (major)"),
             Line2D([0], [0], color="green", label="e2 (minor)"),
@@ -169,7 +197,9 @@ def visualize_cells_3d(cells, title="Cell Division", show_orientation=True, eggs
     plt.show()
 
 
-def visualize_timelapse_napari(history, eggshell=None):
+def visualize_timelapse_napari(
+    history, eggshell=None, surface_history=None, adhesion_history=None
+):
     """
     Visualize cell division timelapse using napari.
 
@@ -179,6 +209,10 @@ def visualize_timelapse_napari(history, eggshell=None):
         List of cell states at each step
     eggshell : tuple(a, b, c) or None
         Ellipsoid semi-axes for eggshell surface
+    surface_history : list[list[np.ndarray]] or None
+        Per-step list of surface point arrays (N_cells x 6 x 3)
+    adhesion_history : list[list[tuple[np.ndarray, np.ndarray]]] or None
+        Per-step list of (center_a, center_b) pairs for adhesion lines
     """
     import napari
     import numpy as np
@@ -193,7 +227,9 @@ def visualize_timelapse_napari(history, eggshell=None):
     for step, cells in enumerate(history):
         cell_list = list(cells.values())
         for cell in cell_list:
-            all_points.append([step, cell.position[2], cell.position[1], cell.position[0]])
+            all_points.append(
+                [step, cell.position[2], cell.position[1], cell.position[0]]
+            )
             all_sizes.append(cell.radius * 2)
             all_features["step"].append(step)
             all_features["name"].append(cell.name)
@@ -218,17 +254,55 @@ def visualize_timelapse_napari(history, eggshell=None):
         name="Cells",
     )
 
+    # Surface points (octahedron vertices)
+    if surface_history is not None:
+        surf_points = []
+        for step, surfaces in enumerate(surface_history):
+            for pts in surfaces:
+                for pt in pts:
+                    surf_points.append([step, pt[2], pt[1], pt[0]])
+        if surf_points:
+            surf_points = np.array(surf_points)
+            viewer.add_points(
+                surf_points,
+                size=0.05,
+                face_color="yellow",
+                opacity=0.8,
+                name="Surface Points",
+            )
+
+    # Adhesion lines (connecting centers of adhered cells)
+    if adhesion_history is not None:
+        adh_lines = []
+        for step, pairs in enumerate(adhesion_history):
+            for ca, cb in pairs:
+                adh_lines.append(
+                    np.array(
+                        [
+                            [step, ca[2], ca[1], ca[0]],
+                            [step, cb[2], cb[1], cb[0]],
+                        ]
+                    )
+                )
+        if adh_lines:
+            viewer.add_shapes(
+                adh_lines,
+                shape_type="line",
+                edge_color="orange",
+                edge_width=0.03,
+                opacity=0.9,
+                name="Adhesion",
+            )
+
     # Add eggshell surface
     if eggshell is not None:
         a, b, c = eggshell
-        # Create ellipsoid mesh
         u = np.linspace(0, 2 * np.pi, 40)
         v = np.linspace(0, np.pi, 20)
         x = a * np.outer(np.cos(u), np.sin(v))
         y = b * np.outer(np.sin(u), np.sin(v))
         z = c * np.outer(np.ones_like(u), np.cos(v))
 
-        # For each timepoint, add eggshell points
         shell_points = []
         for step in range(len(history)):
             for i in range(x.shape[0]):
@@ -240,7 +314,7 @@ def visualize_timelapse_napari(history, eggshell=None):
             shell_points,
             size=0.02,
             face_color="gray",
-            opacity=0.1,
+            opacity=1.0,
             name="Eggshell",
         )
 

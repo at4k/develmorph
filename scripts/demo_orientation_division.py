@@ -97,14 +97,34 @@ def main():
 
     # Record history for timelapse visualization
     history = []
-    history.append(
-        {
-            name: Cell(
-                c.cell_id, c.name, c.position.copy(), c.radius, c.orientation.copy()
-            )
-            for name, c in cells.items()
-        }
-    )
+    surface_history = []
+    adhesion_history = []
+
+    def record_snapshot():
+        history.append(
+            {
+                name: Cell(
+                    c.cell_id, c.name, c.position.copy(), c.radius, c.orientation.copy()
+                )
+                for name, c in cells.items()
+            }
+        )
+        # Surface points per cell
+        surfaces = []
+        for cb in cell_bodies:
+            pts = np.array([positions[si].copy() for si in cb.surface_indices])
+            surfaces.append(pts)
+        surface_history.append(surfaces)
+        # Adhesion lines
+        adh_pairs = []
+        for i, j in active_adhesions:
+            if i < len(cell_bodies) and j < len(cell_bodies):
+                ca = positions[cell_bodies[i].center_idx].copy()
+                cb = positions[cell_bodies[j].center_idx].copy()
+                adh_pairs.append((ca, cb))
+        adhesion_history.append(adh_pairs)
+
+    record_snapshot()
 
     print(f"Eggshell: a={EGGSHELL_A}, b={EGGSHELL_B}, c={EGGSHELL_C}")
     print(f"Initial radius: {INITIAL_RADIUS}")
@@ -191,6 +211,8 @@ def main():
     visualize_timelapse_napari(
         history,
         eggshell=(EGGSHELL_A, EGGSHELL_B, EGGSHELL_C),
+        surface_history=surface_history,
+        adhesion_history=adhesion_history,
     )
 
 
