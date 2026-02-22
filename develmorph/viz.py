@@ -237,13 +237,13 @@ def visualize_timelapse_napari(
     all_points = np.array(all_points)
     all_sizes = np.array(all_sizes)
 
-    # Add points layer with size and labels
+    # Cell centers (small markers with labels)
     viewer.add_points(
         all_points,
-        size=all_sizes,
+        size=0.15,
         face_color="cyan",
         border_color="blue",
-        border_width=0.05,
+        border_width=0.02,
         features=all_features,
         text={
             "string": "{name}",
@@ -251,7 +251,7 @@ def visualize_timelapse_napari(
             "color": "white",
             "anchor": "center",
         },
-        name="Cells",
+        name="Cell Centers",
     )
 
     # Surface points (octahedron vertices)
@@ -265,10 +265,8 @@ def visualize_timelapse_napari(
             surf_points = np.array(surf_points)
             viewer.add_points(
                 surf_points,
-                size=0.08,
+                size=0.12,
                 face_color="yellow",
-                border_color="yellow",
-                border_width=0.0,
                 opacity=1.0,
                 name="Surface Points",
             )
@@ -289,7 +287,7 @@ def visualize_timelapse_napari(
             viewer.add_vectors(
                 vec_data,
                 edge_color="orange",
-                edge_width=0.05,
+                edge_width=0.3,
                 length=1.0,
                 opacity=1.0,
                 name="Adhesion",
