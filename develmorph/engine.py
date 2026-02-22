@@ -26,6 +26,7 @@ class World:
         self.polarity = PolarityField()
         centers = np.array([positions[cb.center_idx] for cb in cell_bodies])
         self.cell_polarity = self.polarity.value(centers)
+        self.active_adhesions = set()
 
     def set_divisions(self, steps):
         self.division_steps = steps
@@ -53,6 +54,9 @@ class World:
             )
             self.velocities = np.zeros_like(self.positions)
 
+            # Clear adhesion pairs (stale indices after division)
+            self.active_adhesions.clear()
+
             # Update polarity
             centers = np.array(
                 [self.positions[cb.center_idx] for cb in self.cell_bodies]
@@ -67,6 +71,7 @@ class World:
             self.dt,
             self.cell_bodies,
             self.shell_params,
+            active_adhesions=self.active_adhesions,
         )
 
         centers = np.array([self.positions[cb.center_idx] for cb in self.cell_bodies])
