@@ -50,7 +50,7 @@ def divide_cell(parent: Cell, rule, lineage: CellLineage, next_id: int):
     return daughter_a, daughter_b
 
 
-def apply_constraints(cells, cell_bodies, positions, n_iter=10):
+def apply_constraints(cells, cell_bodies, positions, active_adhesions, n_iter=10):
     """Apply XPBD constraints with surface-point model."""
     velocities = np.zeros_like(positions)
     inv_masses = np.ones(len(positions))
@@ -63,6 +63,7 @@ def apply_constraints(cells, cell_bodies, positions, n_iter=10):
         cell_bodies=cell_bodies,
         shell_params=(EGGSHELL_A, EGGSHELL_B, EGGSHELL_C),
         n_iter=n_iter,
+        active_adhesions=active_adhesions,
     )
 
     # Update Cell positions from CellBody centers
@@ -92,6 +93,7 @@ def main():
     )
     cell_bodies = [cb_p0]
     cell_body_map = {"P0": cb_p0}
+    active_adhesions = set()
 
     # Record history for timelapse visualization
     history = []
@@ -160,9 +162,10 @@ def main():
 
         # Rebuild indices after all divisions
         positions, _ = build_particle_arrays(cell_bodies, positions)
+        active_adhesions.clear()
 
         # Apply constraints
-        positions = apply_constraints(cells, cell_bodies, positions)
+        positions = apply_constraints(cells, cell_bodies, positions, active_adhesions)
 
         print(f"  After constraints: {len(cells)} cells")
         for name, cell in sorted(cells.items()):
