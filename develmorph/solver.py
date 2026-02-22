@@ -138,14 +138,23 @@ def step(
         for si in cb.surface_indices:
             shell_constraints.append(ShellConstraint(si, *shell_params, 0.0, 0.0))
 
-    # Cell-cell constraints: adhesion mode or legacy collision mode
+    # Collision constraints: always applied for all cell pairs (repulsion)
+    for i in range(len(cell_bodies)):
+        for j in range(i + 1, len(cell_bodies)):
+            ci = cell_bodies[i]
+            cj = cell_bodies[j]
+            ri = _max_surface_dist(positions, ci)
+            rj = _max_surface_dist(positions, cj)
+            collision_constraints.append(
+                CollisionConstraint(ci.center_idx, cj.center_idx, ri + rj, 0.0)
+            )
+
+    # Adhesion constraints: attraction for active pairs only
     adhesion_constraints = []
     if active_adhesions is not None:
-        # Update adhesion pairs with hysteresis
         _update_adhesion_pairs(
             positions, cell_bodies, active_adhesions, attach_margin, detach_margin
         )
-        # Generate AdhesionConstraint for each active pair
         for i, j in active_adhesions:
             ci = cell_bodies[i]
             cj = cell_bodies[j]
@@ -156,17 +165,6 @@ def step(
                     ci.center_idx, cj.center_idx, ri + rj, adhesion_compliance
                 )
             )
-    else:
-        # Legacy: CollisionConstraint for center-to-center (repulsion only)
-        for i in range(len(cell_bodies)):
-            for j in range(i + 1, len(cell_bodies)):
-                ci = cell_bodies[i]
-                cj = cell_bodies[j]
-                ri = _max_surface_dist(positions, ci)
-                rj = _max_surface_dist(positions, cj)
-                collision_constraints.append(
-                    CollisionConstraint(ci.center_idx, cj.center_idx, ri + rj, 0.0)
-                )
 
     # Ordered: volume -> distance -> adhesion/collision -> shell
     # Volume first, then distance restores membrane shape

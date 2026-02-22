@@ -342,20 +342,17 @@ def test_adhesion_pulls_back_when_separated():
     assert abs(dist - 1.0) < 0.05
 
 
-def test_adhesion_pushes_apart_when_overlapping():
-    """Overlapping pair is pushed apart to rest length (repulsion)."""
+def test_adhesion_no_correction_when_overlapping():
+    """No correction when overlapping (C < 0); collision handles repulsion."""
     x = np.array([[0.0, 0.0, 0.0], [0.3, 0.0, 0.0]])
     inv_masses = np.array([1.0, 1.0])
     dt = 0.01
 
     c = AdhesionConstraint(i=0, j=1, rest_length=1.0, compliance=0.0)
-    lambda_acc = 0.0
+    x_before = x.copy()
+    c.project(x, inv_masses, dt, 0.0)
 
-    for _ in range(10):
-        lambda_acc = c.project(x, inv_masses, dt, lambda_acc)
-
-    dist = np.linalg.norm(x[0] - x[1])
-    assert abs(dist - 1.0) < 0.05
+    assert np.allclose(x, x_before)
 
 
 def test_adhesion_no_correction_at_rest():

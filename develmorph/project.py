@@ -48,12 +48,10 @@ class CollisionConstraint:
 
 class AdhesionConstraint:
     """
-    XPBD equality constraint for cell-cell adhesion: |p_i - p_j| = rest_length.
+    XPBD inequality constraint for cell-cell adhesion: |p_i - p_j| <= rest_length.
 
-    Bidirectional distance constraint between cell centers. Corrects both
-    overlap (C < 0, repulsion) and separation (C > 0, attraction).
-    Functionally identical to DistanceConstraint but semantically separate
-    for cell-cell adhesion.
+    Only corrects when cells are too far apart (C > 0, attraction).
+    Overlap (C < 0) is handled by CollisionConstraint separately.
     """
 
     def __init__(self, i: int, j: int, rest_length: float, compliance: float = 0.0):
@@ -71,7 +69,8 @@ class AdhesionConstraint:
 
         C = dist - self.rest_length
 
-        if abs(C) < 1e-12:
+        # Inequality: only correct when too far apart (C > 0)
+        if C <= 0.0:
             return lambda_acc
 
         grad = dx / dist
