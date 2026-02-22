@@ -180,3 +180,163 @@ def test_solver_surface_cell_deforms_on_collision():
     # volume constraint expands lateral (y/z) sides to compensate
     assert dist_minus_x < 1.0
     assert dist_plus_y > 1.0
+
+
+def test_solver_adhesion_attaches_nearby_cells():
+    """Cells within attach threshold gain adhesion."""
+    positions = np.zeros((0, 3))
+    cb1, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]), radius=0.5, positions=positions
+    )
+    cb2, positions = create_cell_body(
+        center=np.array([1.2, 0.0, 0.0]), radius=0.5, positions=positions
+    )
+    vel = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
+
+    active_adhesions = set()
+
+    step(
+        positions=positions,
+        velocities=vel,
+        inv_masses=inv_masses,
+        dt=0.01,
+        cell_bodies=[cb1, cb2],
+        shell_params=(10.0, 10.0, 10.0),
+        active_adhesions=active_adhesions,
+        attach_margin=0.3,
+        detach_margin=0.8,
+    )
+
+    # Distance = 1.2, ri+rj ~ 0.5+0.5 = 1.0, threshold = 1.0 + 0.3 = 1.3
+    # 1.2 < 1.3 so should attach
+    assert (0, 1) in active_adhesions
+
+
+def test_solver_adhesion_does_not_attach_far_cells():
+    """Cells beyond attach threshold do not gain adhesion."""
+    positions = np.zeros((0, 3))
+    cb1, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]), radius=0.5, positions=positions
+    )
+    cb2, positions = create_cell_body(
+        center=np.array([5.0, 0.0, 0.0]), radius=0.5, positions=positions
+    )
+    vel = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
+
+    active_adhesions = set()
+
+    step(
+        positions=positions,
+        velocities=vel,
+        inv_masses=inv_masses,
+        dt=0.01,
+        cell_bodies=[cb1, cb2],
+        shell_params=(10.0, 10.0, 10.0),
+        active_adhesions=active_adhesions,
+        attach_margin=0.3,
+        detach_margin=0.8,
+    )
+
+    assert len(active_adhesions) == 0
+
+
+def test_solver_adhesion_detaches_when_far():
+    """Adhesion is removed when cells exceed detach threshold."""
+    positions = np.zeros((0, 3))
+    cb1, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]), radius=0.5, positions=positions
+    )
+    cb2, positions = create_cell_body(
+        center=np.array([5.0, 0.0, 0.0]), radius=0.5, positions=positions
+    )
+    vel = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
+
+    # Pre-existing adhesion
+    active_adhesions = {(0, 1)}
+
+    step(
+        positions=positions,
+        velocities=vel,
+        inv_masses=inv_masses,
+        dt=0.01,
+        cell_bodies=[cb1, cb2],
+        shell_params=(10.0, 10.0, 10.0),
+        active_adhesions=active_adhesions,
+        attach_margin=0.3,
+        detach_margin=0.8,
+    )
+
+    # Distance = 5.0, ri+rj ~ 1.0, detach threshold = 1.0 + 0.8 = 1.8
+    # 5.0 > 1.8 so should detach
+    assert len(active_adhesions) == 0
+
+
+def test_solver_adhesion_hysteresis():
+    """Adhesion persists between attach and detach thresholds (hysteresis)."""
+    positions = np.zeros((0, 3))
+    cb1, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]), radius=0.5, positions=positions
+    )
+    # Place at distance 1.5: beyond attach (1.3) but within detach (1.8)
+    cb2, positions = create_cell_body(
+        center=np.array([1.5, 0.0, 0.0]), radius=0.5, positions=positions
+    )
+    vel = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
+
+    # Pre-existing adhesion (was attached previously)
+    active_adhesions = {(0, 1)}
+
+    step(
+        positions=positions,
+        velocities=vel,
+        inv_masses=inv_masses,
+        dt=0.01,
+        cell_bodies=[cb1, cb2],
+        shell_params=(10.0, 10.0, 10.0),
+        active_adhesions=active_adhesions,
+        attach_margin=0.3,
+        detach_margin=0.8,
+    )
+
+    # Distance = 1.5, ri+rj ~ 1.0
+    # attach threshold = 1.3 (beyond), detach threshold = 1.8 (within)
+    # Should stay attached due to hysteresis
+    assert (0, 1) in active_adhesions
+
+
+def test_solver_adhesion_keeps_cells_together():
+    """Adhered cells stay near rest length over multiple steps."""
+    positions = np.zeros((0, 3))
+    cb1, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]), radius=0.5, positions=positions
+    )
+    cb2, positions = create_cell_body(
+        center=np.array([1.0, 0.0, 0.0]), radius=0.5, positions=positions
+    )
+    vel = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
+
+    active_adhesions = set()
+
+    # Run multiple steps
+    for _ in range(5):
+        positions, vel = step(
+            positions=positions,
+            velocities=vel,
+            inv_masses=inv_masses,
+            dt=0.01,
+            cell_bodies=[cb1, cb2],
+            shell_params=(10.0, 10.0, 10.0),
+            active_adhesions=active_adhesions,
+            adhesion_compliance=0.1,
+            attach_margin=0.3,
+            detach_margin=0.8,
+        )
+
+    dist = np.linalg.norm(positions[cb1.center_idx] - positions[cb2.center_idx])
+    # Should be near ri+rj = 1.0
+    assert 0.5 < dist < 2.0
