@@ -22,8 +22,8 @@ def step(
     cell_bodies,
     shell_params,
     n_iter=10,
-    membrane_compliance=0.01,
-    volume_compliance=0.0,
+    membrane_compliance=0.001,
+    volume_compliance=1.0,
 ):
     """
     Advance physical state by one time step using XPBD.
@@ -65,16 +65,14 @@ def step(
             )
         )
 
-        # Distance constraints: center-surface
-        for si in cb.surface_indices:
-            rest_len = np.linalg.norm(positions[si] - positions[cb.center_idx])
+        # Distance constraints: center-surface (rest lengths from CellBody)
+        for (ci, si), rest_len in zip(cb.center_surface_edges, cb.center_surface_rest):
             distance_constraints.append(
-                DistanceConstraint(cb.center_idx, si, rest_len, membrane_compliance)
+                DistanceConstraint(ci, si, rest_len, membrane_compliance)
             )
 
-        # Distance constraints: surface-surface (octahedron edges)
-        for a, b in cb.surface_surface_edges:
-            rest_len = np.linalg.norm(positions[a] - positions[b])
+        # Distance constraints: surface-surface (rest lengths from CellBody)
+        for (a, b), rest_len in zip(cb.surface_surface_edges, cb.surface_surface_rest):
             distance_constraints.append(
                 DistanceConstraint(a, b, rest_len, membrane_compliance)
             )
@@ -98,7 +96,8 @@ def step(
                 CollisionConstraint(ci.center_idx, cj.center_idx, ri + rj, 0.0)
             )
 
-    # Ordered: volume first (highest priority), then distance, collision, shell
+    # Ordered: volume -> distance -> collision -> shell
+    # Volume first, then distance restores membrane shape
     all_constraints = (
         volume_constraints
         + distance_constraints

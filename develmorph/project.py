@@ -91,6 +91,13 @@ class VolumeConstraint:
 
     def project(self, x, inv_masses, dt, lambda_acc):
         V = self._compute_volume(x)
+
+        # Guard: if mesh has inverted (negative volume), skip to avoid
+        # pushing it further inside-out. Distance constraints will
+        # restore shape first.
+        if V <= 0.0 and self.target_volume > 0.0:
+            return lambda_acc
+
         C = V - self.target_volume
 
         if abs(C) < 1e-12:
@@ -112,6 +119,20 @@ class VolumeConstraint:
             return lambda_acc
 
         delta_lambda = (-C - alpha_tilde * lambda_acc) / denom
+
+        # Clamp: limit max displacement per particle to a fraction of
+        # the characteristic length (cube root of target volume)
+        char_len = abs(self.target_volume) ** (1.0 / 3.0)
+        max_disp = 0.01 * char_len
+        scale = 1.0
+        for idx in self.all_indices:
+            disp = abs(delta_lambda) * inv_masses[idx] * np.linalg.norm(grads[idx])
+            if disp > 1e-12:
+                s = max_disp / disp
+                if s < scale:
+                    scale = s
+        delta_lambda *= scale
+
         lambda_acc += delta_lambda
 
         for idx in self.all_indices:

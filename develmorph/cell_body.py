@@ -52,7 +52,13 @@ class CellBody:
     """
 
     def __init__(
-        self, center_idx, surface_indices, target_volume, membrane_compliance=0.01
+        self,
+        center_idx,
+        surface_indices,
+        target_volume,
+        center_surface_rest,
+        surface_surface_rest,
+        membrane_compliance=0.01,
     ):
         self.center_idx = center_idx
         self.surface_indices = list(surface_indices)
@@ -60,11 +66,13 @@ class CellBody:
         self.target_volume = target_volume
         self.membrane_compliance = membrane_compliance
 
-        # Edges for distance constraints
+        # Edges for distance constraints (with rest lengths)
         self.center_surface_edges = [(center_idx, si) for si in surface_indices]
+        self.center_surface_rest = list(center_surface_rest)
         self.surface_surface_edges = [
             (surface_indices[a], surface_indices[b]) for a, b in OCTAHEDRON_EDGES
         ]
+        self.surface_surface_rest = list(surface_surface_rest)
 
     def all_indices(self):
         """Return all particle indices belonging to this cell."""
@@ -118,10 +126,24 @@ def create_cell_body(center, radius, positions, membrane_compliance=0.01):
         target_volume += np.dot(p0, np.cross(p1, p2))
     target_volume /= 6.0
 
+    # Compute rest lengths from initial geometry
+    center_surface_rest = [
+        np.linalg.norm(new_positions[si] - new_positions[center_idx])
+        for si in surface_indices
+    ]
+    surface_surface_rest = [
+        np.linalg.norm(
+            new_positions[surface_indices[a]] - new_positions[surface_indices[b]]
+        )
+        for a, b in OCTAHEDRON_EDGES
+    ]
+
     cell_body = CellBody(
         center_idx=center_idx,
         surface_indices=surface_indices,
         target_volume=target_volume,
+        center_surface_rest=center_surface_rest,
+        surface_surface_rest=surface_surface_rest,
         membrane_compliance=membrane_compliance,
     )
 
