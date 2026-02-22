@@ -1,6 +1,7 @@
 import numpy as np
 
 from develmorph.project import (
+    AdhesionConstraint,
     CollisionConstraint,
     DistanceConstraint,
     ShellConstraint,
@@ -14,6 +15,49 @@ def _max_surface_dist(positions, cb):
     return max(np.linalg.norm(positions[si] - center) for si in cb.surface_indices)
 
 
+def _update_adhesion_pairs(
+    positions, cell_bodies, active_adhesions, attach_margin, detach_margin
+):
+    """
+    Update the set of active adhesion pairs using hysteresis logic.
+
+    - Remove pairs whose cells exceed the detach threshold or have stale indices.
+    - Add new pairs whose cells are within the attach threshold.
+
+    Uses cell_bodies list indices (not particle indices) for pair identification.
+    """
+    n = len(cell_bodies)
+
+    # Phase 1: Remove stale or detached pairs
+    to_remove = set()
+    for i, j in active_adhesions:
+        # Stale index check
+        if i >= n or j >= n:
+            to_remove.add((i, j))
+            continue
+        ci = cell_bodies[i]
+        cj = cell_bodies[j]
+        ri = _max_surface_dist(positions, ci)
+        rj = _max_surface_dist(positions, cj)
+        dist = np.linalg.norm(positions[ci.center_idx] - positions[cj.center_idx])
+        if dist > ri + rj + detach_margin:
+            to_remove.add((i, j))
+    active_adhesions -= to_remove
+
+    # Phase 2: Attach new pairs within attach threshold
+    for i in range(n):
+        for j in range(i + 1, n):
+            if (i, j) in active_adhesions:
+                continue
+            ci = cell_bodies[i]
+            cj = cell_bodies[j]
+            ri = _max_surface_dist(positions, ci)
+            rj = _max_surface_dist(positions, cj)
+            dist = np.linalg.norm(positions[ci.center_idx] - positions[cj.center_idx])
+            if dist < ri + rj + attach_margin:
+                active_adhesions.add((i, j))
+
+
 def step(
     positions,
     velocities,
@@ -24,6 +68,10 @@ def step(
     n_iter=10,
     membrane_compliance=0.001,
     volume_compliance=1.0,
+    active_adhesions=None,
+    adhesion_compliance=0.1,
+    attach_margin=0.3,
+    detach_margin=0.8,
 ):
     """
     Advance physical state by one time step using XPBD.
@@ -38,6 +86,11 @@ def step(
         n_iter: number of constraint iterations
         membrane_compliance: compliance for membrane distance constraints
         volume_compliance: compliance for volume constraints (0.0 = incompressible)
+        active_adhesions: mutable set of (i,j) cell index pairs, or None for
+            legacy CollisionConstraint behavior
+        adhesion_compliance: compliance for adhesion constraints
+        attach_margin: distance margin above ri+rj for forming new adhesions
+        detach_margin: distance margin above ri+rj for breaking adhesions
 
     Returns:
         (new_positions, new_velocities)
@@ -85,22 +138,42 @@ def step(
         for si in cb.surface_indices:
             shell_constraints.append(ShellConstraint(si, *shell_params, 0.0, 0.0))
 
-    # Collision constraints: center-to-center between cells
-    for i in range(len(cell_bodies)):
-        for j in range(i + 1, len(cell_bodies)):
+    # Cell-cell constraints: adhesion mode or legacy collision mode
+    adhesion_constraints = []
+    if active_adhesions is not None:
+        # Update adhesion pairs with hysteresis
+        _update_adhesion_pairs(
+            positions, cell_bodies, active_adhesions, attach_margin, detach_margin
+        )
+        # Generate AdhesionConstraint for each active pair
+        for i, j in active_adhesions:
             ci = cell_bodies[i]
             cj = cell_bodies[j]
             ri = _max_surface_dist(positions, ci)
             rj = _max_surface_dist(positions, cj)
-            collision_constraints.append(
-                CollisionConstraint(ci.center_idx, cj.center_idx, ri + rj, 0.0)
+            adhesion_constraints.append(
+                AdhesionConstraint(
+                    ci.center_idx, cj.center_idx, ri + rj, adhesion_compliance
+                )
             )
+    else:
+        # Legacy: CollisionConstraint for center-to-center (repulsion only)
+        for i in range(len(cell_bodies)):
+            for j in range(i + 1, len(cell_bodies)):
+                ci = cell_bodies[i]
+                cj = cell_bodies[j]
+                ri = _max_surface_dist(positions, ci)
+                rj = _max_surface_dist(positions, cj)
+                collision_constraints.append(
+                    CollisionConstraint(ci.center_idx, cj.center_idx, ri + rj, 0.0)
+                )
 
-    # Ordered: volume -> distance -> collision -> shell
+    # Ordered: volume -> distance -> adhesion/collision -> shell
     # Volume first, then distance restores membrane shape
     all_constraints = (
         volume_constraints
         + distance_constraints
+        + adhesion_constraints
         + collision_constraints
         + shell_constraints
     )
