@@ -44,6 +44,21 @@ OCTAHEDRON_EDGES = [
 ]
 
 
+def compute_edges(triangles):
+    """
+    Extract unique edges from a triangle list.
+
+    Each edge is a sorted tuple (i, j) where i < j.
+    Returns a sorted list for deterministic ordering.
+    """
+    edge_set = set()
+    for a, b, c in triangles:
+        edge_set.add((min(a, b), max(a, b)))
+        edge_set.add((min(b, c), max(b, c)))
+        edge_set.add((min(a, c), max(a, c)))
+    return sorted(edge_set)
+
+
 class CellBody:
     """
     A cell represented as center point + 6 octahedron surface points.

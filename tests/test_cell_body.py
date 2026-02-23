@@ -2,7 +2,12 @@ import math
 
 import numpy as np
 
-from develmorph.cell_body import CellBody, build_particle_arrays, create_cell_body
+from develmorph.cell_body import (
+    CellBody,
+    build_particle_arrays,
+    compute_edges,
+    create_cell_body,
+)
 
 
 def test_create_cell_body_particle_count():
@@ -106,3 +111,21 @@ def test_cell_body_edge_pairs():
     )
     assert len(cb.center_surface_edges) == 6
     assert len(cb.surface_surface_edges) == 12
+
+
+def test_compute_edges_octahedron():
+    """compute_edges extracts 12 unique edges from 8 octahedron triangles."""
+    from develmorph.cell_body import OCTAHEDRON_TRIANGLES
+
+    edges = compute_edges(OCTAHEDRON_TRIANGLES)
+    assert len(edges) == 12
+    # All edges should be sorted tuples (i < j)
+    for a, b in edges:
+        assert a < b
+
+
+def test_compute_edges_single_triangle():
+    """Single triangle produces 3 edges."""
+    edges = compute_edges([(0, 1, 2)])
+    assert len(edges) == 3
+    assert set(edges) == {(0, 1), (0, 2), (1, 2)}
