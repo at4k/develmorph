@@ -106,7 +106,7 @@ def subdivide_mesh(directions, triangles, area_threshold, max_iterations=10):
 
 class CellBody:
     """
-    A cell represented as center point + 6 octahedron surface points.
+    A cell represented as center point + surface points on a triangulated mesh.
 
     All indices refer to positions in the flat particle array.
     """
@@ -119,10 +119,13 @@ class CellBody:
         center_surface_rest,
         surface_surface_rest,
         membrane_compliance=0.01,
+        triangles=None,
+        edges=None,
     ):
         self.center_idx = center_idx
         self.surface_indices = list(surface_indices)
-        self.triangles = OCTAHEDRON_TRIANGLES
+        self.triangles = triangles if triangles is not None else OCTAHEDRON_TRIANGLES
+        self.edges = edges if edges is not None else OCTAHEDRON_EDGES
         self.target_volume = target_volume
         self.membrane_compliance = membrane_compliance
 
@@ -130,7 +133,7 @@ class CellBody:
         self.center_surface_edges = [(center_idx, si) for si in surface_indices]
         self.center_surface_rest = list(center_surface_rest)
         self.surface_surface_edges = [
-            (surface_indices[a], surface_indices[b]) for a, b in OCTAHEDRON_EDGES
+            (surface_indices[a], surface_indices[b]) for a, b in self.edges
         ]
         self.surface_surface_rest = list(surface_surface_rest)
 

@@ -163,6 +163,23 @@ def test_subdivide_mesh_points_on_unit_sphere():
         assert abs(np.linalg.norm(d) - 1.0) < 1e-10
 
 
+def test_cell_body_stores_custom_edges():
+    """CellBody stores edges passed via constructor, not hardcoded OCTAHEDRON_EDGES."""
+    custom_edges = [(0, 1), (1, 2), (2, 0)]
+    cb = CellBody(
+        center_idx=0,
+        surface_indices=[1, 2, 3],
+        target_volume=1.0,
+        center_surface_rest=[1.0, 1.0, 1.0],
+        surface_surface_rest=[1.0, 1.0, 1.0],
+        triangles=[(0, 1, 2)],
+        edges=custom_edges,
+    )
+    assert cb.edges == custom_edges
+    assert cb.triangles == [(0, 1, 2)]
+    assert len(cb.surface_surface_edges) == 3
+
+
 def test_subdivide_mesh_centroid_split_produces_3_triangles():
     """Subdividing 1 triangle produces exactly 3 sub-triangles."""
     dirs = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
