@@ -56,8 +56,16 @@ def divide_cell_body(
     parent_indices = sorted(parent.all_indices(), reverse=True)
     positions = np.delete(positions, parent_indices, axis=0)
 
-    orient1 = daughter_orientations[0] if daughter_orientations[0] is not None else parent.orientation.copy()
-    orient2 = daughter_orientations[1] if daughter_orientations[1] is not None else parent.orientation.copy()
+    orient1 = (
+        daughter_orientations[0].copy()
+        if daughter_orientations[0] is not None
+        else parent.orientation.copy()
+    )
+    orient2 = (
+        daughter_orientations[1].copy()
+        if daughter_orientations[1] is not None
+        else parent.orientation.copy()
+    )
 
     d1, positions = create_cell_body(
         center=center1,
