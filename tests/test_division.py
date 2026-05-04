@@ -100,3 +100,74 @@ def test_divide_cell_body_with_area_threshold():
     assert len(daughters) == 2
     for d in daughters:
         assert len(d.surface_indices) >= 6
+
+
+def test_divide_cell_body_daughter_names():
+    """Daughters receive the specified names."""
+    positions = np.zeros((0, 3))
+    parent, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+        name="P0",
+    )
+    daughters, _ = divide_cell_body(
+        parent,
+        positions,
+        axis=np.array([1.0, 0.0, 0.0]),
+        daughter_names=("AB", "P1"),
+    )
+    assert daughters[0].name == "AB"
+    assert daughters[1].name == "P1"
+
+
+def test_divide_cell_body_default_daughter_names_are_none():
+    """Without daughter_names, daughters have name=None."""
+    positions = np.zeros((0, 3))
+    parent, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+    )
+    daughters, _ = divide_cell_body(
+        parent, positions, axis=np.array([1.0, 0.0, 0.0])
+    )
+    assert daughters[0].name is None
+    assert daughters[1].name is None
+
+
+def test_divide_cell_body_inherits_parent_orientation():
+    """Without daughter_orientations, daughters inherit parent orientation."""
+    custom = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]], dtype=float)
+    positions = np.zeros((0, 3))
+    parent, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+        orientation=custom,
+    )
+    daughters, _ = divide_cell_body(
+        parent, positions, axis=np.array([1.0, 0.0, 0.0])
+    )
+    assert np.allclose(daughters[0].orientation, custom)
+    assert np.allclose(daughters[1].orientation, custom)
+
+
+def test_divide_cell_body_custom_daughter_orientations():
+    """Daughters receive the specified orientations."""
+    orient_a = np.eye(3)
+    orient_b = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]], dtype=float)
+    positions = np.zeros((0, 3))
+    parent, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+    )
+    daughters, _ = divide_cell_body(
+        parent,
+        positions,
+        axis=np.array([1.0, 0.0, 0.0]),
+        daughter_orientations=(orient_a, orient_b),
+    )
+    assert np.allclose(daughters[0].orientation, orient_a)
+    assert np.allclose(daughters[1].orientation, orient_b)

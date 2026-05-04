@@ -3,7 +3,15 @@ import numpy as np
 from develmorph.cell_body import create_cell_body
 
 
-def divide_cell_body(parent, positions, axis=None, volume_ratio=0.5, area_threshold=None):
+def divide_cell_body(
+    parent,
+    positions,
+    axis=None,
+    volume_ratio=0.5,
+    area_threshold=None,
+    daughter_names=(None, None),
+    daughter_orientations=(None, None),
+):
     """
     Divide a CellBody into two daughters.
 
@@ -17,6 +25,9 @@ def divide_cell_body(parent, positions, axis=None, volume_ratio=0.5, area_thresh
         axis: division axis (unit vector). Random if None.
         volume_ratio: fraction of volume for first daughter (0.0-1.0)
         area_threshold: if set, passed to create_cell_body for adaptive subdivision
+        daughter_names: (name1, name2) biological names for daughters
+        daughter_orientations: (orient1, orient2) 3x3 orientation matrices.
+            If None for either, inherits parent orientation.
 
     Returns:
         (daughters, new_positions): list of 2 CellBodies and updated positions
@@ -45,13 +56,17 @@ def divide_cell_body(parent, positions, axis=None, volume_ratio=0.5, area_thresh
     parent_indices = sorted(parent.all_indices(), reverse=True)
     positions = np.delete(positions, parent_indices, axis=0)
 
-    # Create daughters (appending to cleaned positions)
+    orient1 = daughter_orientations[0] if daughter_orientations[0] is not None else parent.orientation.copy()
+    orient2 = daughter_orientations[1] if daughter_orientations[1] is not None else parent.orientation.copy()
+
     d1, positions = create_cell_body(
         center=center1,
         radius=r1,
         positions=positions,
         membrane_compliance=parent.membrane_compliance,
         area_threshold=area_threshold,
+        name=daughter_names[0],
+        orientation=orient1,
     )
     d2, positions = create_cell_body(
         center=center2,
@@ -59,6 +74,8 @@ def divide_cell_body(parent, positions, axis=None, volume_ratio=0.5, area_thresh
         positions=positions,
         membrane_compliance=parent.membrane_compliance,
         area_threshold=area_threshold,
+        name=daughter_names[1],
+        orientation=orient2,
     )
 
     return [d1, d2], positions
