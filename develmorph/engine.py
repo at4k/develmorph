@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Optional
+
 import numpy as np
 
 from develmorph.cell_body import build_particle_arrays
@@ -8,7 +12,7 @@ from develmorph.solver import step
 
 
 class World:
-    def __init__(self, cell_bodies, positions, dt=0.01, shell_params=(5.0, 5.0, 5.0), lineage=None):
+    def __init__(self, cell_bodies, positions, dt=0.01, shell_params=(5.0, 5.0, 5.0), lineage: Optional[CellLineage] = None):
 
         self.cell_bodies = list(cell_bodies)
         self.positions = positions.copy()
