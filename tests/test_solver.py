@@ -340,3 +340,32 @@ def test_solver_adhesion_keeps_cells_together():
     dist = np.linalg.norm(positions[cb1.center_idx] - positions[cb2.center_idx])
     # Should be near ri+rj = 1.0
     assert 0.5 < dist < 2.0
+
+
+def test_step_with_subdivided_cell():
+    """XPBD step works correctly with a subdivided cell (>6 surface points)."""
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+        area_threshold=0.3,
+    )
+    n_particles = len(positions)
+    velocities = np.zeros((n_particles, 3))
+    inv_masses = np.ones(n_particles)
+
+    new_pos, new_vel = step(
+        positions, velocities, inv_masses,
+        dt=0.01,
+        cell_bodies=[cb],
+        shell_params=(5.0, 5.0, 5.0),
+        n_iter=5,
+    )
+
+    assert new_pos.shape == (n_particles, 3)
+    center = new_pos[cb.center_idx]
+    for si in cb.surface_indices:
+        dist = np.linalg.norm(new_pos[si] - center)
+        assert dist < 3.0
+        assert not np.any(np.isnan(new_pos[si]))
