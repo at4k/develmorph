@@ -81,3 +81,22 @@ def test_division_particle_count():
     )
 
     assert len(positions) == 14
+
+
+def test_divide_cell_body_with_area_threshold():
+    """Daughter cells are created with subdivision when area_threshold is passed."""
+    positions = np.zeros((0, 3))
+    parent, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+        area_threshold=0.3,
+    )
+    daughters, new_positions = divide_cell_body(
+        parent, positions,
+        axis=np.array([1.0, 0.0, 0.0]),
+        area_threshold=0.3,
+    )
+    assert len(daughters) == 2
+    for d in daughters:
+        assert len(d.surface_indices) >= 6

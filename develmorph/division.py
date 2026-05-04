@@ -3,7 +3,7 @@ import numpy as np
 from develmorph.cell_body import create_cell_body
 
 
-def divide_cell_body(parent, positions, axis=None, volume_ratio=0.5):
+def divide_cell_body(parent, positions, axis=None, volume_ratio=0.5, area_threshold=None):
     """
     Divide a CellBody into two daughters.
 
@@ -16,6 +16,7 @@ def divide_cell_body(parent, positions, axis=None, volume_ratio=0.5):
         positions: (N, 3) particle positions array
         axis: division axis (unit vector). Random if None.
         volume_ratio: fraction of volume for first daughter (0.0-1.0)
+        area_threshold: if set, passed to create_cell_body for adaptive subdivision
 
     Returns:
         (daughters, new_positions): list of 2 CellBodies and updated positions
@@ -50,12 +51,14 @@ def divide_cell_body(parent, positions, axis=None, volume_ratio=0.5):
         radius=r1,
         positions=positions,
         membrane_compliance=parent.membrane_compliance,
+        area_threshold=area_threshold,
     )
     d2, positions = create_cell_body(
         center=center2,
         radius=r2,
         positions=positions,
         membrane_compliance=parent.membrane_compliance,
+        area_threshold=area_threshold,
     )
 
     return [d1, d2], positions
