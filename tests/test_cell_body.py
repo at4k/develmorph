@@ -163,6 +163,70 @@ def test_subdivide_mesh_points_on_unit_sphere():
         assert abs(np.linalg.norm(d) - 1.0) < 1e-10
 
 
+def test_create_cell_body_with_subdivision():
+    """create_cell_body with area_threshold produces more surface points."""
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+        area_threshold=0.3,
+    )
+    assert len(cb.surface_indices) > 6
+    assert len(cb.triangles) > 8
+    center = positions[cb.center_idx]
+    for si in cb.surface_indices:
+        dist = np.linalg.norm(positions[si] - center)
+        assert abs(dist - 1.0) < 1e-10
+
+
+def test_create_cell_body_no_subdivision_default():
+    """create_cell_body without area_threshold produces standard 6 surface points."""
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+    )
+    assert len(cb.surface_indices) == 6
+    assert len(cb.triangles) == 8
+
+
+def test_create_cell_body_subdivision_volume_correct():
+    """Subdivided cell has target volume between octahedron and sphere volume.
+
+    Centroid subdivision pushes face midpoints onto the sphere surface, so the
+    effective mesh volume is larger than the inscribed octahedron and smaller
+    than the enclosing sphere.
+    """
+    positions = np.zeros((0, 3))
+    r = 1.0
+    cb, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=r,
+        positions=positions,
+        area_threshold=0.3,
+    )
+    assert cb.target_volume > 0
+    octahedron_vol = (4.0 / 3.0) * r**3
+    sphere_vol = (4.0 / 3.0) * math.pi * r**3
+    assert cb.target_volume > octahedron_vol
+    assert cb.target_volume < sphere_vol
+
+
+def test_create_cell_body_subdivision_edges_match_triangles():
+    """Edge count from compute_edges matches stored edges."""
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+        area_threshold=0.3,
+    )
+    expected_edges = compute_edges(cb.triangles)
+    assert len(cb.edges) == len(expected_edges)
+
+
 def test_cell_body_stores_custom_edges():
     """CellBody stores edges passed via constructor, not hardcoded OCTAHEDRON_EDGES."""
     custom_edges = [(0, 1), (1, 2), (2, 0)]

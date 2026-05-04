@@ -149,7 +149,7 @@ class CellBody:
         ]
 
 
-def create_cell_body(center, radius, positions, membrane_compliance=0.01):
+def create_cell_body(center, radius, positions, membrane_compliance=0.01, area_threshold=None):
     """
     Create a CellBody and append its particles to the positions array.
 
@@ -158,6 +158,9 @@ def create_cell_body(center, radius, positions, membrane_compliance=0.01):
         radius: cell radius
         positions: existing (N, 3) positions array to append to
         membrane_compliance: membrane softness
+        area_threshold: if set, subdivide triangles whose world-space area
+            exceeds this value. Larger cells subdivide more automatically.
+            None means no subdivision (standard 6-point octahedron).
 
     Returns:
         (cell_body, new_positions): CellBody and updated positions array
@@ -165,13 +168,23 @@ def create_cell_body(center, radius, positions, membrane_compliance=0.01):
     center = np.asarray(center, dtype=float)
     n = len(positions)
 
+    # Determine mesh topology
+    if area_threshold is not None:
+        unit_threshold = area_threshold / (radius * radius)
+        dirs, triangles = subdivide_mesh(OCTAHEDRON_DIRS, OCTAHEDRON_TRIANGLES, unit_threshold)
+        edges = compute_edges(triangles)
+    else:
+        dirs = OCTAHEDRON_DIRS
+        triangles = OCTAHEDRON_TRIANGLES
+        edges = OCTAHEDRON_EDGES
+
     # Center point
     center_idx = n
     new_points = [center]
 
     # Surface points
     surface_indices = []
-    for i, d in enumerate(OCTAHEDRON_DIRS):
+    for i, d in enumerate(dirs):
         surface_indices.append(n + 1 + i)
         new_points.append(center + radius * d)
 
@@ -182,7 +195,7 @@ def create_cell_body(center, radius, positions, membrane_compliance=0.01):
 
     # Compute target volume from actual mesh geometry
     target_volume = 0.0
-    for a, b, c in OCTAHEDRON_TRIANGLES:
+    for a, b, c in triangles:
         p0 = new_positions[surface_indices[a]]
         p1 = new_positions[surface_indices[b]]
         p2 = new_positions[surface_indices[c]]
@@ -198,7 +211,7 @@ def create_cell_body(center, radius, positions, membrane_compliance=0.01):
         np.linalg.norm(
             new_positions[surface_indices[a]] - new_positions[surface_indices[b]]
         )
-        for a, b in OCTAHEDRON_EDGES
+        for a, b in edges
     ]
 
     cell_body = CellBody(
@@ -208,6 +221,8 @@ def create_cell_body(center, radius, positions, membrane_compliance=0.01):
         center_surface_rest=center_surface_rest,
         surface_surface_rest=surface_surface_rest,
         membrane_compliance=membrane_compliance,
+        triangles=triangles,
+        edges=edges,
     )
 
     return cell_body, new_positions
