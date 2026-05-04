@@ -59,6 +59,51 @@ def compute_edges(triangles):
     return sorted(edge_set)
 
 
+def subdivide_mesh(directions, triangles, area_threshold, max_iterations=10):
+    """
+    Iteratively subdivide triangles whose area exceeds the threshold.
+
+    For each oversized triangle, insert its centroid (projected to unit sphere)
+    and replace the triangle with 3 sub-triangles.
+
+    Args:
+        directions: (N, 3) unit direction vectors on the sphere
+        triangles: list of (i, j, k) index tuples
+        area_threshold: maximum allowed triangle area
+        max_iterations: safety limit on subdivision passes
+
+    Returns:
+        (new_directions, new_triangles): refined mesh as (np.ndarray, list)
+    """
+    dirs = list(directions)
+    tris = list(triangles)
+
+    for _ in range(max_iterations):
+        new_tris = []
+        any_subdivided = False
+        for a, b, c in tris:
+            v0 = np.asarray(dirs[a])
+            v1 = np.asarray(dirs[b])
+            v2 = np.asarray(dirs[c])
+            area = 0.5 * np.linalg.norm(np.cross(v1 - v0, v2 - v0))
+            if area > area_threshold:
+                centroid = (v0 + v1 + v2) / 3.0
+                centroid = centroid / np.linalg.norm(centroid)
+                ci = len(dirs)
+                dirs.append(centroid)
+                new_tris.append((a, b, ci))
+                new_tris.append((b, c, ci))
+                new_tris.append((c, a, ci))
+                any_subdivided = True
+            else:
+                new_tris.append((a, b, c))
+        tris = new_tris
+        if not any_subdivided:
+            break
+
+    return np.array(dirs), tris
+
+
 class CellBody:
     """
     A cell represented as center point + 6 octahedron surface points.

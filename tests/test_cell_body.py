@@ -3,10 +3,13 @@ import math
 import numpy as np
 
 from develmorph.cell_body import (
+    OCTAHEDRON_DIRS,
+    OCTAHEDRON_TRIANGLES,
     CellBody,
     build_particle_arrays,
     compute_edges,
     create_cell_body,
+    subdivide_mesh,
 )
 
 
@@ -129,3 +132,42 @@ def test_compute_edges_single_triangle():
     edges = compute_edges([(0, 1, 2)])
     assert len(edges) == 3
     assert set(edges) == {(0, 1), (0, 2), (1, 2)}
+
+
+def test_subdivide_mesh_no_subdivision_when_below_threshold():
+    """When all triangles are below threshold, mesh is unchanged."""
+    dirs, tris = subdivide_mesh(OCTAHEDRON_DIRS, OCTAHEDRON_TRIANGLES, area_threshold=10.0)
+    assert len(dirs) == 6
+    assert len(tris) == 8
+
+
+def test_subdivide_mesh_all_subdivided():
+    """With threshold=0.3, all octahedron faces are subdivided below the threshold.
+
+    Centroid subdivision converges to a fixed point at ~0.207 (arc-midpoint of the
+    longest original edge). Any threshold above this fixed point guarantees convergence.
+    """
+    dirs, tris = subdivide_mesh(OCTAHEDRON_DIRS, OCTAHEDRON_TRIANGLES, area_threshold=0.3)
+    assert len(dirs) > 6
+    assert len(tris) > 8
+    for a, b, c in tris:
+        v0, v1, v2 = dirs[a], dirs[b], dirs[c]
+        area = 0.5 * np.linalg.norm(np.cross(v1 - v0, v2 - v0))
+        assert area <= 0.3 + 1e-10
+
+
+def test_subdivide_mesh_points_on_unit_sphere():
+    """All output direction vectors lie on the unit sphere."""
+    dirs, tris = subdivide_mesh(OCTAHEDRON_DIRS, OCTAHEDRON_TRIANGLES, area_threshold=0.3)
+    for d in dirs:
+        assert abs(np.linalg.norm(d) - 1.0) < 1e-10
+
+
+def test_subdivide_mesh_centroid_split_produces_3_triangles():
+    """Subdividing 1 triangle produces exactly 3 sub-triangles."""
+    dirs = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    dirs = dirs / np.linalg.norm(dirs, axis=1, keepdims=True)
+    tris = [(0, 1, 2)]
+    new_dirs, new_tris = subdivide_mesh(dirs, tris, area_threshold=0.01)
+    assert len(new_dirs) >= 4
+    assert len(new_tris) >= 3
