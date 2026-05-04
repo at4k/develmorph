@@ -227,6 +227,25 @@ def test_create_cell_body_subdivision_edges_match_triangles():
     assert len(cb.edges) == len(expected_edges)
 
 
+def test_build_particle_arrays_with_subdivided_cell():
+    """build_particle_arrays works correctly with subdivided cells."""
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+        area_threshold=0.3,
+    )
+    n_surface = len(cb.surface_indices)
+    n_edges = len(cb.edges)
+
+    new_pos, new_inv = build_particle_arrays([cb], positions)
+
+    assert len(new_pos) == 1 + n_surface
+    assert len(cb.surface_surface_edges) == n_edges
+    assert len(cb.center_surface_edges) == n_surface
+
+
 def test_cell_body_stores_custom_edges():
     """CellBody stores edges passed via constructor, not hardcoded OCTAHEDRON_EDGES."""
     custom_edges = [(0, 1), (1, 2), (2, 0)]

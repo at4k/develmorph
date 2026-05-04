@@ -268,7 +268,7 @@ def build_particle_arrays(cell_bodies, positions):
         # Rebuild edge lists with new indices
         cb.center_surface_edges = [(cb.center_idx, si) for si in cb.surface_indices]
         cb.surface_surface_edges = [
-            (cb.surface_indices[a], cb.surface_indices[b]) for a, b in OCTAHEDRON_EDGES
+            (cb.surface_indices[a], cb.surface_indices[b]) for a, b in cb.edges
         ]
 
     return np.array(new_positions), np.array(new_inv_masses)
