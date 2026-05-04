@@ -121,7 +121,11 @@ class CellBody:
         membrane_compliance=0.01,
         triangles=None,
         edges=None,
+        name=None,
+        orientation=None,
     ):
+        self.name = name
+        self.orientation = orientation if orientation is not None else np.eye(3)
         self.center_idx = center_idx
         self.surface_indices = list(surface_indices)
         self.triangles = triangles if triangles is not None else OCTAHEDRON_TRIANGLES
@@ -149,7 +153,9 @@ class CellBody:
         ]
 
 
-def create_cell_body(center, radius, positions, membrane_compliance=0.01, area_threshold=None):
+def create_cell_body(
+    center, radius, positions, membrane_compliance=0.01, area_threshold=None, name=None, orientation=None
+):
     """
     Create a CellBody and append its particles to the positions array.
 
@@ -223,6 +229,8 @@ def create_cell_body(center, radius, positions, membrane_compliance=0.01, area_t
         membrane_compliance=membrane_compliance,
         triangles=triangles,
         edges=edges,
+        name=name,
+        orientation=orientation if orientation is not None else np.eye(3),
     )
 
     return cell_body, new_positions

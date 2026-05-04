@@ -271,3 +271,87 @@ def test_subdivide_mesh_centroid_split_produces_3_triangles():
     new_dirs, new_tris = subdivide_mesh(dirs, tris, area_threshold=0.01)
     assert len(new_dirs) >= 4
     assert len(new_tris) >= 3
+
+
+def test_cell_body_default_name_is_none():
+    """CellBody.name defaults to None."""
+    cb = CellBody(
+        center_idx=0,
+        surface_indices=[1, 2, 3, 4, 5, 6],
+        target_volume=1.0,
+        center_surface_rest=[1.0] * 6,
+        surface_surface_rest=[1.0] * 12,
+    )
+    assert cb.name is None
+
+
+def test_cell_body_stores_name():
+    """CellBody stores the name passed to constructor."""
+    cb = CellBody(
+        center_idx=0,
+        surface_indices=[1, 2, 3, 4, 5, 6],
+        target_volume=1.0,
+        center_surface_rest=[1.0] * 6,
+        surface_surface_rest=[1.0] * 12,
+        name="P0",
+    )
+    assert cb.name == "P0"
+
+
+def test_cell_body_default_orientation_is_identity():
+    """CellBody.orientation defaults to identity matrix."""
+    cb = CellBody(
+        center_idx=0,
+        surface_indices=[1, 2, 3, 4, 5, 6],
+        target_volume=1.0,
+        center_surface_rest=[1.0] * 6,
+        surface_surface_rest=[1.0] * 12,
+    )
+    assert np.allclose(cb.orientation, np.eye(3))
+
+
+def test_create_cell_body_with_name():
+    """create_cell_body passes name through to CellBody."""
+    positions = np.zeros((0, 3))
+    cb, _ = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+        name="P0",
+    )
+    assert cb.name == "P0"
+
+
+def test_create_cell_body_default_name_is_none():
+    """create_cell_body without name gives CellBody.name == None."""
+    positions = np.zeros((0, 3))
+    cb, _ = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+    )
+    assert cb.name is None
+
+
+def test_create_cell_body_with_orientation():
+    """create_cell_body passes orientation through to CellBody."""
+    custom = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]], dtype=float)
+    positions = np.zeros((0, 3))
+    cb, _ = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+        orientation=custom,
+    )
+    assert np.allclose(cb.orientation, custom)
+
+
+def test_create_cell_body_default_orientation_is_identity():
+    """create_cell_body without orientation gives identity matrix."""
+    positions = np.zeros((0, 3))
+    cb, _ = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+    )
+    assert np.allclose(cb.orientation, np.eye(3))
