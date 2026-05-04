@@ -75,9 +75,9 @@ def plot_4cell(world):
         ax.plot_surface(x, y, z, alpha=0.4, color=color)
         ax.text(*center, cb.name, fontsize=9, ha="center")
 
-    ax.set_xlim(-3, 3)
-    ax.set_ylim(-3, 3)
-    ax.set_zlim(-3, 3)
+    ax.set_xlim(-5, 5)
+    ax.set_ylim(-5, 5)
+    ax.set_zlim(-5, 5)
     ax.set_xlabel("X (A-P axis)")
     ax.set_ylabel("Y")
     ax.set_zlabel("Z")
