@@ -25,7 +25,7 @@ CELL_COLORS = {
 }
 
 
-def run_simulation(n_division_steps=4, n_settle_steps=200):
+def run_simulation(n_division_steps=4, n_settle_steps=300):
     lineage = CellLineage(YAML_PATH)
 
     positions = np.zeros((0, 3))
@@ -36,12 +36,20 @@ def run_simulation(n_division_steps=4, n_settle_steps=200):
         name="P0",
     )
 
+    # Eggshell dimensions from Kajita et al. 2003, Table 1:
+    # Rx=29.77, Ry=20.27, Rz=16.83 um → biological ratio 1.77:1.21:1.00
+    # Scaled to 1.3x (2.30, 1.57, 1.30) so spherical P0 (r=1.0) fits without divergence.
+    # Biological P0 is ellipsoidal (~16um z in 16.83um egg); spherical model needs larger shell.
+    # n_iter=100: large initial overlaps after division require many iterations to converge
     world = World(
         cell_bodies=[p0],
         positions=positions,
         lineage=lineage,
-        shell_params=(4.0, 4.0, 4.0),
+        shell_params=(2.30, 1.57, 1.30),
         dt=0.01,
+        n_iter=100,
+        damping=1.0,
+        shell_compliance=0.001,
     )
 
     # Division phase: steps 0-3 (division at step_counts 1, 2, 3)
@@ -58,9 +66,22 @@ def run_simulation(n_division_steps=4, n_settle_steps=200):
     return world
 
 
+def _draw_eggshell(ax, shell_params, alpha=0.08, color="silver"):
+    a, b, c = shell_params
+    u = np.linspace(0, 2 * np.pi, 40)
+    v = np.linspace(0, np.pi, 20)
+    xs = a * np.outer(np.cos(u), np.sin(v))
+    ys = b * np.outer(np.sin(u), np.sin(v))
+    zs = c * np.outer(np.ones_like(u), np.cos(v))
+    ax.plot_surface(xs, ys, zs, alpha=alpha, color=color)
+    ax.plot_wireframe(xs, ys, zs, color="gray", alpha=0.15, linewidth=0.4, rstride=4, cstride=4)
+
+
 def plot_4cell(world):
-    fig = plt.figure(figsize=(8, 6))
+    fig = plt.figure(figsize=(10, 7))
     ax = fig.add_subplot(111, projection="3d")
+
+    _draw_eggshell(ax, world.shell_params)
 
     for cb in world.cell_bodies:
         center = world.positions[cb.center_idx]
@@ -72,16 +93,17 @@ def plot_4cell(world):
         x = center[0] + r * np.outer(np.cos(u), np.sin(v))
         y = center[1] + r * np.outer(np.sin(u), np.sin(v))
         z = center[2] + r * np.outer(np.ones_like(u), np.cos(v))
-        ax.plot_surface(x, y, z, alpha=0.4, color=color)
-        ax.text(*center, cb.name, fontsize=9, ha="center")
+        ax.plot_surface(x, y, z, alpha=0.5, color=color)
+        ax.text(*center, cb.name, fontsize=9, ha="center", weight="bold")
 
-    ax.set_xlim(-5, 5)
-    ax.set_ylim(-5, 5)
-    ax.set_zlim(-5, 5)
+    a, b, c = world.shell_params
+    ax.set_xlim(-a * 1.1, a * 1.1)
+    ax.set_ylim(-b * 1.1, b * 1.1)
+    ax.set_zlim(-c * 1.1, c * 1.1)
     ax.set_xlabel("X (A-P axis)")
-    ax.set_ylabel("Y")
-    ax.set_zlabel("Z")
-    ax.set_title("C. elegans 4-cell stage (XPBD)")
+    ax.set_ylabel("Y (V-D axis)")
+    ax.set_zlabel("Z (L-R axis)")
+    ax.set_title("C. elegans 4-cell stage (XPBD)\nshell: {:.2f} x {:.2f} x {:.2f}".format(*world.shell_params))
     plt.tight_layout()
     plt.show()
 

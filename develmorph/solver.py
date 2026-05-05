@@ -72,6 +72,8 @@ def step(
     adhesion_compliance=0.1,
     attach_margin=0.3,
     detach_margin=0.8,
+    damping=0.0,
+    shell_compliance=0.0,
 ):
     """
     Advance physical state by one time step using XPBD.
@@ -91,6 +93,9 @@ def step(
         adhesion_compliance: compliance for adhesion constraints
         attach_margin: distance margin above ri+rj for forming new adhesions
         detach_margin: distance margin above ri+rj for breaking adhesions
+        damping: velocity damping factor [0.0, 1.0]. 0.0 = fully inertial,
+            1.0 = fully overdamped (zero velocity carry-over between steps).
+            Use 1.0 for biological cells (low Reynolds number / viscosity-dominated).
 
     Returns:
         (new_positions, new_velocities)
@@ -130,13 +135,15 @@ def step(
                 DistanceConstraint(a, b, rest_len, membrane_compliance)
             )
 
-        # Shell constraints: center + surface points
-        max_r = _max_surface_dist(positions, cb)
+        # Shell constraints: center + surface points.
+        # Use nominal radius from target_volume to avoid instability when
+        # membrane deformation temporarily inflates _max_surface_dist.
+        nominal_r = (3.0 * cb.target_volume / 4.0) ** (1.0 / 3.0)
         shell_constraints.append(
-            ShellConstraint(cb.center_idx, *shell_params, max_r, 0.0)
+            ShellConstraint(cb.center_idx, *shell_params, nominal_r, shell_compliance)
         )
         for si in cb.surface_indices:
-            shell_constraints.append(ShellConstraint(si, *shell_params, 0.0, 0.0))
+            shell_constraints.append(ShellConstraint(si, *shell_params, 0.0, shell_compliance))
 
     # Collision constraints: always applied for all cell pairs (repulsion)
     for i in range(len(cell_bodies)):
@@ -182,7 +189,7 @@ def step(
         for k, c in enumerate(all_constraints):
             lambdas[k] = c.project(x, inv_masses, dt, lambdas[k])
 
-    # 4. Update velocities
-    new_vel = (x - x_prev) / dt if dt > 0 else np.zeros_like(x)
+    # 4. Update velocities (overdamped for biological cells: damping=1.0 → vel=0)
+    new_vel = (x - x_prev) / dt * (1.0 - damping) if dt > 0 else np.zeros_like(x)
 
     return x, new_vel

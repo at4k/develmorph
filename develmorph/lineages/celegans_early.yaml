@@ -18,11 +18,11 @@ steps:
         volume_ratio: 0.6 # AB gets 60%, P1 gets 40%
 
   # 2-cell -> 3-cell (AB divides)
-  # AB divides symmetrically into ABa and ABp
+  # AB divides symmetrically into ABa and ABp along minor axis (y, orthogonal to A-P)
   - step: 2
     divisions:
       - parent: AB
-        axis: orthogonal_axis
+        axis: minor_axis
         daughters: [ABa, ABp]
         volume_ratio: 0.5 # Symmetric
 

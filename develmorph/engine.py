@@ -11,8 +11,31 @@ from develmorph.polarity import PolarityField
 from develmorph.solver import step
 
 
+def _shift_cell_indices(cell_bodies, deleted_indices, exclude=None):
+    """
+    Update particle indices in cell_bodies after np.delete removed some particles.
+
+    divide_cell_body calls np.delete which shifts all remaining indices.
+    Any surviving cell whose indices fall above deleted positions must be
+    decremented to match the new compacted array.
+    """
+    for cb in cell_bodies:
+        if cb is exclude:
+            continue
+
+        def _shift(idx, deleted=deleted_indices):
+            return idx - sum(1 for pi in deleted if pi < idx)
+
+        cb.center_idx = _shift(cb.center_idx)
+        cb.surface_indices = [_shift(si) for si in cb.surface_indices]
+        cb.center_surface_edges = [(cb.center_idx, si) for si in cb.surface_indices]
+        cb.surface_surface_edges = [
+            (cb.surface_indices[a], cb.surface_indices[b]) for a, b in cb.edges
+        ]
+
+
 class World:
-    def __init__(self, cell_bodies, positions, dt=0.01, shell_params=(5.0, 5.0, 5.0), lineage: Optional[CellLineage] = None):
+    def __init__(self, cell_bodies, positions, dt=0.01, shell_params=(5.0, 5.0, 5.0), lineage: Optional[CellLineage] = None, n_iter: int = 10, damping: float = 0.0, shell_compliance: float = 0.0):
 
         self.cell_bodies = list(cell_bodies)
         self.positions = positions.copy()
@@ -26,6 +49,9 @@ class World:
 
         self.shell_params = shell_params
         self.lineage = lineage
+        self.n_iter = n_iter
+        self.damping = damping
+        self.shell_compliance = shell_compliance
 
         self.division_steps = []
 
@@ -51,6 +77,8 @@ class World:
                 continue
 
             parent = self.cell_bodies[idx]
+            parent_all_indices = sorted(parent.all_indices())
+
             axis = self.lineage.resolve_division_axis(rule, parent.orientation)
             d_orientations = (parent.orientation.copy(), parent.orientation.copy())
             daughters, self.positions = divide_cell_body(
@@ -61,6 +89,10 @@ class World:
                 daughter_names=tuple(rule.daughters),
                 daughter_orientations=d_orientations,
             )
+
+            # np.delete inside divide_cell_body shifts all surviving particle
+            # indices downward; fix them before build_particle_arrays reads them.
+            _shift_cell_indices(self.cell_bodies, parent_all_indices, exclude=parent)
 
             self.cell_bodies.pop(idx)
             self.cell_bodies.extend(daughters)
@@ -82,8 +114,11 @@ class World:
                 key=lambda i: self.cell_bodies[i].target_volume,
             )
             parent = self.cell_bodies[idx]
+            parent_all_indices = sorted(parent.all_indices())
 
             daughters, self.positions = divide_cell_body(parent, self.positions)
+
+            _shift_cell_indices(self.cell_bodies, parent_all_indices, exclude=parent)
 
             # Replace parent with daughters in cell list
             self.cell_bodies.pop(idx)
@@ -112,7 +147,10 @@ class World:
             self.dt,
             self.cell_bodies,
             self.shell_params,
+            n_iter=self.n_iter,
             active_adhesions=self.active_adhesions,
+            damping=self.damping,
+            shell_compliance=self.shell_compliance,
         )
 
         centers = np.array([self.positions[cb.center_idx] for cb in self.cell_bodies])

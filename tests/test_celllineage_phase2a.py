@@ -37,7 +37,7 @@ def test_celllineage_get_division_for_cell():
     # Step 2: AB divides
     rule = lineage.get_division_for_cell(step=2, cell_name="AB")
     assert rule is not None
-    assert rule.axis == "orthogonal_axis"
+    assert rule.axis == "minor_axis"
 
     # Step 2: P1 does not divide
     rule = lineage.get_division_for_cell(step=2, cell_name="P1")
