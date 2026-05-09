@@ -252,6 +252,79 @@ class ShellConstraint:
         return lambda_acc
 
 
+class SurfacePenetrationConstraint:
+    """
+    XPBD inequality constraint: surface particle stays outside another cell's sphere.
+
+    Pushes a single surface particle (surf_idx) out of another cell's nominal sphere
+    (centered at other_center_idx with radius min_dist). ONE-SIDED: only surf_idx
+    moves, other_center_idx is governed by CollisionConstraint separately.
+
+    Constraint value:
+        C = ||x[surf_idx] - x[other_center_idx]|| - min_dist
+    Only corrects when C < 0 (penetrating).
+    """
+
+    def __init__(
+        self,
+        surf_idx: int,
+        other_center_idx: int,
+        min_dist: float,
+        compliance: float = 0.0,
+    ):
+        self.surf_idx = surf_idx
+        self.other_center_idx = other_center_idx
+        self.min_dist = min_dist
+        self.compliance = compliance
+
+    def project(self, x, inv_masses, dt, lambda_prev):
+        diff = x[self.surf_idx] - x[self.other_center_idx]
+        dist = np.linalg.norm(diff)
+        C = dist - self.min_dist
+        if C >= 0 or dist < 1e-9:
+            return lambda_prev
+        n = diff / dist
+        alpha_tilde = self.compliance / (dt * dt) if dt > 0 else 0.0
+        w = inv_masses[self.surf_idx]
+        dlambda = (-C - alpha_tilde * lambda_prev) / (w + alpha_tilde)
+        x[self.surf_idx] += w * dlambda * n
+        return lambda_prev + dlambda
+
+
+class HalfSpaceConstraint:
+    """
+    XPBD inequality constraint: surface particle stays on cell i's side of the
+    contact plane between cells i and j.
+
+    Contact plane: unit normal n = (cj-ci)/||cj-ci|| pointing from ci toward cj,
+    passing through midpoint M = (ci+cj)/2.
+
+    C = -dot(x[surf_idx] - M, n)
+    C >= 0  =>  particle is on cell i's side  (correct, no correction)
+    C <  0  =>  particle has crossed into cell j's half-space (fire constraint)
+
+    Only surf_idx moves; the correction direction is always -n (contact normal),
+    so there is no directional bias regardless of where on the surface the
+    particle sits.  This produces a flat contact interface naturally.
+    """
+
+    def __init__(self, surf_idx: int, M, n, compliance: float = 0.0):
+        self.surf_idx = surf_idx
+        self.M = np.asarray(M, dtype=float)
+        self.n = np.asarray(n, dtype=float)  # unit normal ci -> cj
+        self.compliance = compliance
+
+    def project(self, x, inv_masses, dt, lambda_prev):
+        C = -np.dot(x[self.surf_idx] - self.M, self.n)
+        if C >= 0:
+            return lambda_prev
+        alpha_tilde = self.compliance / (dt * dt) if dt > 0 else 0.0
+        w = inv_masses[self.surf_idx]
+        dlambda = (-C - alpha_tilde * lambda_prev) / (w + alpha_tilde)
+        x[self.surf_idx] += w * dlambda * (-self.n)
+        return lambda_prev + dlambda
+
+
 class DistanceConstraint:
     """
     XPBD equality constraint: |p_i - p_j| = rest_length.

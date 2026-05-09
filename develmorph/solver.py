@@ -4,6 +4,7 @@ from develmorph.project import (
     AdhesionConstraint,
     CollisionConstraint,
     DistanceConstraint,
+    HalfSpaceConstraint,
     ShellConstraint,
     VolumeConstraint,
 )
@@ -37,8 +38,8 @@ def _update_adhesion_pairs(
             continue
         ci = cell_bodies[i]
         cj = cell_bodies[j]
-        ri = _max_surface_dist(positions, ci)
-        rj = _max_surface_dist(positions, cj)
+        ri = (3.0 * ci.target_volume / 4.0) ** (1.0 / 3.0)
+        rj = (3.0 * cj.target_volume / 4.0) ** (1.0 / 3.0)
         dist = np.linalg.norm(positions[ci.center_idx] - positions[cj.center_idx])
         if dist > ri + rj + detach_margin:
             to_remove.add((i, j))
@@ -51,8 +52,8 @@ def _update_adhesion_pairs(
                 continue
             ci = cell_bodies[i]
             cj = cell_bodies[j]
-            ri = _max_surface_dist(positions, ci)
-            rj = _max_surface_dist(positions, cj)
+            ri = (3.0 * ci.target_volume / 4.0) ** (1.0 / 3.0)
+            rj = (3.0 * cj.target_volume / 4.0) ** (1.0 / 3.0)
             dist = np.linalg.norm(positions[ci.center_idx] - positions[cj.center_idx])
             if dist < ri + rj + attach_margin:
                 active_adhesions.add((i, j))
@@ -74,6 +75,8 @@ def step(
     detach_margin=0.8,
     damping=0.0,
     shell_compliance=0.0,
+    collision_compliance=0.0,
+    contact_overlap=0.0,
 ):
     """
     Advance physical state by one time step using XPBD.
@@ -123,13 +126,18 @@ def step(
             )
         )
 
-        # Distance constraints: center-surface (rest lengths from CellBody)
+        # Distance constraints: center-surface
+        # Stiffer than surface-surface so the center tracks the cell, but soft
+        # enough (alpha_tilde = 10) that SurfacePenetrationConstraint
+        # (alpha_tilde = 0, 12x stronger per iter) can overcome it and produce
+        # visible contact-zone flattening.
+        center_compliance = 0.001
         for (ci, si), rest_len in zip(cb.center_surface_edges, cb.center_surface_rest):
             distance_constraints.append(
-                DistanceConstraint(ci, si, rest_len, membrane_compliance)
+                DistanceConstraint(ci, si, rest_len, center_compliance)
             )
 
-        # Distance constraints: surface-surface (rest lengths from CellBody)
+        # Distance constraints: surface-surface (deformable membrane)
         for (a, b), rest_len in zip(cb.surface_surface_edges, cb.surface_surface_rest):
             distance_constraints.append(
                 DistanceConstraint(a, b, rest_len, membrane_compliance)
@@ -145,16 +153,78 @@ def step(
         for si in cb.surface_indices:
             shell_constraints.append(ShellConstraint(si, *shell_params, 0.0, shell_compliance))
 
-    # Collision constraints: always applied for all cell pairs (repulsion)
+    # Collision constraints: center-to-center repulsion.
+    # When contact_overlap > 0, equilibrium distance is shrunk so centers overlap
+    # slightly; HalfSpaceConstraints then prevent surface particles from crossing
+    # into the opposing cell's half-space, producing direction-unbiased contact
+    # flattening and volume redistribution into the free side.
+    equil_dist = 1.0 - contact_overlap
     for i in range(len(cell_bodies)):
         for j in range(i + 1, len(cell_bodies)):
             ci = cell_bodies[i]
             cj = cell_bodies[j]
-            ri = _max_surface_dist(positions, ci)
-            rj = _max_surface_dist(positions, cj)
+            ri = (3.0 * ci.target_volume / 4.0) ** (1.0 / 3.0)
+            rj = (3.0 * cj.target_volume / 4.0) ** (1.0 / 3.0)
             collision_constraints.append(
-                CollisionConstraint(ci.center_idx, cj.center_idx, ri + rj, 0.0)
+                CollisionConstraint(
+                    ci.center_idx, cj.center_idx,
+                    (ri + rj) * equil_dist, collision_compliance,
+                )
             )
+
+    # Surface contact constraints.
+    # contact_overlap > 0: HalfSpaceConstraints — every surface particle of cell i
+    # is constrained to stay on cell i's side of the contact plane with cell j.
+    # Force direction is always along the contact normal, removing directional
+    # bias that appeared with the nearest-pair CollisionConstraint approach.
+    # contact_overlap == 0 (default/legacy): nearest-pair CollisionConstraint.
+    surface_penetration_constraints = []
+    if contact_overlap > 0.0:
+        for i in range(len(cell_bodies)):
+            for j in range(len(cell_bodies)):
+                if i == j:
+                    continue
+                ci = cell_bodies[i]
+                cj = cell_bodies[j]
+                ri = (3.0 * ci.target_volume / 4.0) ** (1.0 / 3.0)
+                rj = (3.0 * cj.target_volume / 4.0) ** (1.0 / 3.0)
+                center_dist = np.linalg.norm(
+                    positions[ci.center_idx] - positions[cj.center_idx]
+                )
+                if center_dist > ri + rj + 0.3 or center_dist < 1e-9:
+                    continue
+                n_vec = (
+                    positions[cj.center_idx] - positions[ci.center_idx]
+                ) / center_dist
+                M = (positions[ci.center_idx] + positions[cj.center_idx]) / 2.0
+                for si in ci.surface_indices:
+                    surface_penetration_constraints.append(
+                        HalfSpaceConstraint(si, M, n_vec, compliance=0.0)
+                    )
+    else:
+        for i in range(len(cell_bodies)):
+            for j in range(i + 1, len(cell_bodies)):
+                ci = cell_bodies[i]
+                cj = cell_bodies[j]
+                ri = (3.0 * ci.target_volume / 4.0) ** (1.0 / 3.0)
+                rj = (3.0 * cj.target_volume / 4.0) ** (1.0 / 3.0)
+                center_dist = np.linalg.norm(
+                    positions[ci.center_idx] - positions[cj.center_idx]
+                )
+                if center_dist > ri + rj + 0.3:
+                    continue
+                si_c = min(
+                    ci.surface_indices,
+                    key=lambda s: np.linalg.norm(positions[s] - positions[cj.center_idx]),
+                )
+                sj_c = min(
+                    cj.surface_indices,
+                    key=lambda s: np.linalg.norm(positions[s] - positions[ci.center_idx]),
+                )
+                contact_r = 0.05 * (ri + rj)
+                surface_penetration_constraints.append(
+                    CollisionConstraint(si_c, sj_c, contact_r, collision_compliance)
+                )
 
     # Adhesion constraints: attraction for active pairs only
     adhesion_constraints = []
@@ -165,21 +235,24 @@ def step(
         for i, j in active_adhesions:
             ci = cell_bodies[i]
             cj = cell_bodies[j]
-            ri = _max_surface_dist(positions, ci)
-            rj = _max_surface_dist(positions, cj)
+            ri = (3.0 * ci.target_volume / 4.0) ** (1.0 / 3.0)
+            rj = (3.0 * cj.target_volume / 4.0) ** (1.0 / 3.0)
             adhesion_constraints.append(
                 AdhesionConstraint(
-                    ci.center_idx, cj.center_idx, ri + rj, adhesion_compliance
+                    ci.center_idx, cj.center_idx,
+                    (ri + rj) * equil_dist, adhesion_compliance,
                 )
             )
 
-    # Ordered: volume -> distance -> adhesion/collision -> shell
-    # Volume first, then distance restores membrane shape
+    # Ordered: volume -> distance -> adhesion -> collision -> surface_penetration -> shell
+    # Volume first, then distance restores membrane shape; surface penetration after
+    # collision so center positions are settled before surface points are corrected.
     all_constraints = (
         volume_constraints
         + distance_constraints
         + adhesion_constraints
         + collision_constraints
+        + surface_penetration_constraints
         + shell_constraints
     )
 
@@ -188,6 +261,15 @@ def step(
     for _ in range(n_iter):
         for k, c in enumerate(all_constraints):
             lambdas[k] = c.project(x, inv_masses, dt, lambdas[k])
+
+    # 3b. Inversion guard: if the signed mesh volume goes negative the center
+    # has escaped outside the surface hull, reversing all restoring forces.
+    # Snap it to the surface centroid so the next step starts from a valid state.
+    for cb in cell_bodies:
+        tris = cb.surface_global_triangles()
+        vol = sum(np.dot(x[i0], np.cross(x[i1], x[i2])) for i0, i1, i2 in tris) / 6.0
+        if vol <= 0.0:
+            x[cb.center_idx] = x[np.array(cb.surface_indices)].mean(axis=0)
 
     # 4. Update velocities (overdamped for biological cells: damping=1.0 → vel=0)
     new_vel = (x - x_prev) / dt * (1.0 - damping) if dt > 0 else np.zeros_like(x)

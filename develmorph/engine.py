@@ -35,7 +35,7 @@ def _shift_cell_indices(cell_bodies, deleted_indices, exclude=None):
 
 
 class World:
-    def __init__(self, cell_bodies, positions, dt=0.01, shell_params=(5.0, 5.0, 5.0), lineage: Optional[CellLineage] = None, n_iter: int = 10, damping: float = 0.0, shell_compliance: float = 0.0):
+    def __init__(self, cell_bodies, positions, dt=0.01, shell_params=(5.0, 5.0, 5.0), lineage: Optional[CellLineage] = None, n_iter: int = 10, damping: float = 0.0, shell_compliance: float = 0.0, collision_compliance: float = 0.0, membrane_compliance: float = 0.001, volume_compliance: float = 1.0, contact_overlap: float = 0.0):
 
         self.cell_bodies = list(cell_bodies)
         self.positions = positions.copy()
@@ -52,6 +52,10 @@ class World:
         self.n_iter = n_iter
         self.damping = damping
         self.shell_compliance = shell_compliance
+        self.collision_compliance = collision_compliance
+        self.membrane_compliance = membrane_compliance
+        self.volume_compliance = volume_compliance
+        self.contact_overlap = contact_overlap
 
         self.division_steps = []
 
@@ -151,6 +155,10 @@ class World:
             active_adhesions=self.active_adhesions,
             damping=self.damping,
             shell_compliance=self.shell_compliance,
+            collision_compliance=self.collision_compliance,
+            membrane_compliance=self.membrane_compliance,
+            volume_compliance=self.volume_compliance,
+            contact_overlap=self.contact_overlap,
         )
 
         centers = np.array([self.positions[cb.center_idx] for cb in self.cell_bodies])
