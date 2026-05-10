@@ -1,6 +1,6 @@
 import numpy as np
 
-from develmorph.cell_body import create_cell_body
+from develmorph.cell_body import create_cell_body, TOPOLOGY_VOLUME_FACTOR
 
 
 def divide_cell_body(
@@ -16,7 +16,7 @@ def divide_cell_body(
     Divide a CellBody into two daughters.
 
     Removes parent particles and creates two new CellBodies with
-    octahedron surface points. Volume is distributed according to
+    CellBody surface points. Volume is distributed according to
     volume_ratio.
 
     Args:
@@ -39,8 +39,9 @@ def divide_cell_body(
     parent_center = positions[parent.center_idx].copy()
     parent_volume = parent.target_volume
 
-    # Octahedron volume: V = (4/3) * r^3, so r = (3V/4)^(1/3)
-    parent_radius = (3.0 * parent_volume / 4.0) ** (1.0 / 3.0)
+    # Radius from volume: V = TOPOLOGY_VOLUME_FACTOR[topology] * r^3
+    vol_factor = TOPOLOGY_VOLUME_FACTOR[parent.topology]
+    parent_radius = (parent_volume / vol_factor) ** (1.0 / 3.0)
 
     # Daughter radii from volume ratio
     r1 = parent_radius * (volume_ratio ** (1.0 / 3.0))
@@ -73,6 +74,7 @@ def divide_cell_body(
         positions=positions,
         membrane_compliance=parent.membrane_compliance,
         area_threshold=area_threshold,
+        topology=parent.topology,
         name=daughter_names[0],
         orientation=orient1,
     )
@@ -82,6 +84,7 @@ def divide_cell_body(
         positions=positions,
         membrane_compliance=parent.membrane_compliance,
         area_threshold=area_threshold,
+        topology=parent.topology,
         name=daughter_names[1],
         orientation=orient2,
     )

@@ -1,6 +1,6 @@
 import numpy as np
 
-from develmorph.cell_body import create_cell_body
+from develmorph.cell_body import create_cell_body, TOPOLOGY_VOLUME_FACTOR
 from develmorph.division import divide_cell_body
 
 
@@ -171,3 +171,26 @@ def test_divide_cell_body_custom_daughter_orientations():
     )
     assert np.allclose(daughters[0].orientation, orient_a)
     assert np.allclose(daughters[1].orientation, orient_b)
+
+
+def test_divide_ico_daughters_inherit_topology():
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=[0.0, 0.0, 0.0], radius=1.0, positions=positions, topology='ico',
+    )
+    axis = np.array([1.0, 0.0, 0.0])
+    daughters, positions = divide_cell_body(cb, positions, axis=axis)
+    assert daughters[0].topology == 'ico'
+    assert daughters[1].topology == 'ico'
+
+
+def test_divide_ico_daughters_correct_volume():
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=[0.0, 0.0, 0.0], radius=1.0, positions=positions, topology='ico',
+    )
+    parent_volume = cb.target_volume
+    axis = np.array([1.0, 0.0, 0.0])
+    daughters, positions = divide_cell_body(cb, positions, axis=axis)
+    total_daughter_volume = daughters[0].target_volume + daughters[1].target_volume
+    np.testing.assert_allclose(total_daughter_volume, parent_volume, rtol=0.01)
