@@ -112,3 +112,35 @@ def test_world_lineage_daughters_inherit_orientation():
     world.step()  # step_count=1: P0 -> AB + P1
     for cb in world.cell_bodies:
         assert np.allclose(cb.orientation, np.eye(3))
+
+
+def test_world_simulates_ico_cell_without_error():
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=[0.0, 0.0, 0.0], radius=1.0, positions=positions,
+        topology='ico',
+    )
+    world = World(
+        cell_bodies=[cb],
+        positions=positions,
+    )
+    world.run(5)
+    assert world.cell_bodies[0].topology == 'ico'
+    assert len(world.positions) == 13  # 1 center + 12 surface
+
+
+def test_world_ico_cell_preserves_approximate_volume():
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=[0.0, 0.0, 0.0], radius=1.0, positions=positions,
+        topology='ico',
+    )
+    initial_target = cb.target_volume
+    world = World(
+        cell_bodies=[cb],
+        positions=positions,
+        shell_params=(10.0, 10.0, 10.0),
+    )
+    world.run(20)
+    # target_volume is a constraint target set at creation — it does not change
+    assert world.cell_bodies[0].target_volume == initial_target
