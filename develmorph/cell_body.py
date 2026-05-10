@@ -43,6 +43,21 @@ OCTAHEDRON_EDGES = [
     (5, 2),  # equator ring
 ]
 
+def compute_edges(triangles):
+    """
+    Extract unique edges from a triangle list.
+
+    Each edge is a sorted tuple (i, j) where i < j.
+    Returns a sorted list for deterministic ordering.
+    """
+    edge_set = set()
+    for a, b, c in triangles:
+        edge_set.add((min(a, b), max(a, b)))
+        edge_set.add((min(b, c), max(b, c)))
+        edge_set.add((min(a, c), max(a, c)))
+    return sorted(edge_set)
+
+
 # Icosahedron: 12 vertices via golden ratio
 # Positions are all permutations of (0, +/-1, +/-phi), normalized to unit sphere.
 # Vertex index layout:
@@ -80,19 +95,8 @@ ICOSAHEDRON_TRIANGLES = [
     (7, 9, 11),
 ]
 
-# 30 edges (each pair i < j, derived from ICOSAHEDRON_TRIANGLES adjacency)
-ICOSAHEDRON_EDGES = [
-    (0, 1), (0, 4), (0, 5), (0, 8), (0, 9),
-    (1, 6), (1, 7), (1, 8), (1, 9),
-    (2, 3), (2, 4), (2, 5), (2, 10), (2, 11),
-    (3, 6), (3, 7), (3, 10), (3, 11),
-    (4, 5), (4, 8), (4, 10),
-    (5, 9), (5, 11),
-    (6, 7), (6, 8), (6, 10),
-    (7, 9), (7, 11),
-    (8, 10),
-    (9, 11),
-]
+# 30 edges derived from ICOSAHEDRON_TRIANGLES; no hardcoded list to drift.
+ICOSAHEDRON_EDGES = compute_edges(ICOSAHEDRON_TRIANGLES)
 
 # Volume = TOPOLOGY_VOLUME_FACTOR[topology] * r^3 for a cell of radius r.
 # Octahedron: exact 4/3. Icosahedron: computed from mesh via divergence theorem.
@@ -105,21 +109,6 @@ TOPOLOGY_VOLUME_FACTOR = {
     'oct': 4.0 / 3.0,
     'ico': _ICO_VOLUME_FACTOR,
 }
-
-
-def compute_edges(triangles):
-    """
-    Extract unique edges from a triangle list.
-
-    Each edge is a sorted tuple (i, j) where i < j.
-    Returns a sorted list for deterministic ordering.
-    """
-    edge_set = set()
-    for a, b, c in triangles:
-        edge_set.add((min(a, b), max(a, b)))
-        edge_set.add((min(b, c), max(b, c)))
-        edge_set.add((min(a, c), max(a, c)))
-    return sorted(edge_set)
 
 
 def subdivide_mesh(directions, triangles, area_threshold, max_iterations=10):

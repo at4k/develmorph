@@ -390,3 +390,32 @@ def test_create_cell_body_default_orientation_is_identity():
         positions=positions,
     )
     assert np.allclose(cb.orientation, np.eye(3))
+
+
+def test_icosahedron_winding_outward():
+    for a, b, c in ICOSAHEDRON_TRIANGLES:
+        va, vb, vc = ICOSAHEDRON_DIRS[a], ICOSAHEDRON_DIRS[b], ICOSAHEDRON_DIRS[c]
+        normal = np.cross(vb - va, vc - va)
+        centroid = (va + vb + vc) / 3.0
+        assert np.dot(centroid, normal) > 0
+
+
+def test_icosahedron_edges_match_triangles():
+    from develmorph.cell_body import compute_edges
+    assert sorted(ICOSAHEDRON_EDGES) == compute_edges(ICOSAHEDRON_TRIANGLES)
+
+
+def test_icosahedron_is_manifold():
+    counts = {}
+    for a, b, c in ICOSAHEDRON_TRIANGLES:
+        for i, j in [(a, b), (b, c), (a, c)]:
+            e = (min(i, j), max(i, j))
+            counts[e] = counts.get(e, 0) + 1
+    assert all(n == 2 for n in counts.values())
+
+
+def test_topology_volume_factor_ico_analytical():
+    phi = (1.0 + math.sqrt(5.0)) / 2.0
+    a = 4.0 / math.sqrt(10.0 + 2.0 * math.sqrt(5.0))
+    expected = (5.0 / 12.0) * (3.0 + math.sqrt(5.0)) * a**3
+    np.testing.assert_allclose(TOPOLOGY_VOLUME_FACTOR['ico'], expected, atol=1e-12)
