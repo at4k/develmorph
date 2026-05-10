@@ -11,6 +11,41 @@ from develmorph.cell_body import (
     create_cell_body,
     subdivide_mesh,
 )
+from develmorph.cell_body import (
+    ICOSAHEDRON_DIRS,
+    ICOSAHEDRON_TRIANGLES,
+    ICOSAHEDRON_EDGES,
+    TOPOLOGY_VOLUME_FACTOR,
+)
+
+
+def test_icosahedron_vertex_count():
+    assert len(ICOSAHEDRON_DIRS) == 12
+
+
+def test_icosahedron_dirs_on_unit_sphere():
+    norms = np.linalg.norm(ICOSAHEDRON_DIRS, axis=1)
+    np.testing.assert_allclose(norms, 1.0, atol=1e-10)
+
+
+def test_icosahedron_face_count():
+    assert len(ICOSAHEDRON_TRIANGLES) == 20
+
+
+def test_icosahedron_edge_count():
+    assert len(ICOSAHEDRON_EDGES) == 30
+
+
+def test_topology_volume_factor_oct():
+    np.testing.assert_allclose(TOPOLOGY_VOLUME_FACTOR['oct'], 4.0 / 3.0, atol=1e-10)
+
+
+def test_topology_volume_factor_ico_larger_than_oct():
+    assert TOPOLOGY_VOLUME_FACTOR['ico'] > TOPOLOGY_VOLUME_FACTOR['oct']
+
+
+def test_topology_volume_factor_ico_less_than_sphere():
+    assert TOPOLOGY_VOLUME_FACTOR['ico'] < 4.0 / 3.0 * np.pi
 
 
 def test_create_cell_body_particle_count():

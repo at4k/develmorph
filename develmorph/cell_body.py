@@ -43,6 +43,69 @@ OCTAHEDRON_EDGES = [
     (5, 2),  # equator ring
 ]
 
+# Icosahedron: 12 vertices via golden ratio
+# Positions are all permutations of (0, +/-1, +/-phi), normalized to unit sphere.
+# Vertex index layout:
+#   0-3:  (0, +/-1, +/-phi)
+#   4-7:  (+/-1, +/-phi, 0)
+#   8-11: (+/-phi, 0, +/-1)
+_PHI = (1.0 + math.sqrt(5.0)) / 2.0
+_ICO_NORM = math.sqrt(1.0 + _PHI * _PHI)
+
+ICOSAHEDRON_DIRS = np.array([
+    [0.0,            1.0 / _ICO_NORM,  _PHI / _ICO_NORM],   # 0
+    [0.0,           -1.0 / _ICO_NORM,  _PHI / _ICO_NORM],   # 1
+    [0.0,            1.0 / _ICO_NORM, -_PHI / _ICO_NORM],   # 2
+    [0.0,           -1.0 / _ICO_NORM, -_PHI / _ICO_NORM],   # 3
+    [ 1.0 / _ICO_NORM,  _PHI / _ICO_NORM, 0.0],             # 4
+    [-1.0 / _ICO_NORM,  _PHI / _ICO_NORM, 0.0],             # 5
+    [ 1.0 / _ICO_NORM, -_PHI / _ICO_NORM, 0.0],             # 6
+    [-1.0 / _ICO_NORM, -_PHI / _ICO_NORM, 0.0],             # 7
+    [ _PHI / _ICO_NORM, 0.0,  1.0 / _ICO_NORM],             # 8
+    [-_PHI / _ICO_NORM, 0.0,  1.0 / _ICO_NORM],             # 9
+    [ _PHI / _ICO_NORM, 0.0, -1.0 / _ICO_NORM],             # 10
+    [-_PHI / _ICO_NORM, 0.0, -1.0 / _ICO_NORM],             # 11
+])
+
+# 20 triangular faces with outward-facing normals.
+# Orientation was verified by computing dot(Va, cross(Vb, Vc)) > 0 for each face.
+ICOSAHEDRON_TRIANGLES = [
+    (0, 1, 8),  (0, 9, 1),  (0, 4, 5),  (0, 8, 4),  (0, 5, 9),
+    (1, 7, 6),  (1, 6, 8),  (1, 9, 7),
+    (2, 10, 3), (2, 3, 11), (2, 5, 4),  (2, 4, 10), (2, 11, 5),
+    (3, 6, 7),  (3, 10, 6), (3, 7, 11),
+    (4, 8, 10),
+    (5, 11, 9),
+    (6, 10, 8),
+    (7, 9, 11),
+]
+
+# 30 edges (each pair i < j, derived from ICOSAHEDRON_TRIANGLES adjacency)
+ICOSAHEDRON_EDGES = [
+    (0, 1), (0, 4), (0, 5), (0, 8), (0, 9),
+    (1, 6), (1, 7), (1, 8), (1, 9),
+    (2, 3), (2, 4), (2, 5), (2, 10), (2, 11),
+    (3, 6), (3, 7), (3, 10), (3, 11),
+    (4, 5), (4, 8), (4, 10),
+    (5, 9), (5, 11),
+    (6, 7), (6, 8), (6, 10),
+    (7, 9), (7, 11),
+    (8, 10),
+    (9, 11),
+]
+
+# Volume = TOPOLOGY_VOLUME_FACTOR[topology] * r^3 for a cell of radius r.
+# Octahedron: exact 4/3. Icosahedron: computed from mesh via divergence theorem.
+_ICO_VOLUME_FACTOR = sum(
+    np.dot(ICOSAHEDRON_DIRS[a], np.cross(ICOSAHEDRON_DIRS[b], ICOSAHEDRON_DIRS[c]))
+    for a, b, c in ICOSAHEDRON_TRIANGLES
+) / 6.0
+
+TOPOLOGY_VOLUME_FACTOR = {
+    'oct': 4.0 / 3.0,
+    'ico': _ICO_VOLUME_FACTOR,
+}
+
 
 def compute_edges(triangles):
     """
