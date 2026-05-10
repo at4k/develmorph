@@ -419,3 +419,61 @@ def test_topology_volume_factor_ico_analytical():
     a = 4.0 / math.sqrt(10.0 + 2.0 * math.sqrt(5.0))
     expected = (5.0 / 12.0) * (3.0 + math.sqrt(5.0)) * a**3
     np.testing.assert_allclose(TOPOLOGY_VOLUME_FACTOR['ico'], expected, atol=1e-12)
+
+
+def test_create_cell_body_ico_particle_count():
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=[0.0, 0.0, 0.0], radius=1.0, positions=positions, topology='ico',
+    )
+    assert len(positions) == 13  # 1 center + 12 surface
+
+
+def test_create_cell_body_ico_surface_count():
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=[0.0, 0.0, 0.0], radius=1.0, positions=positions, topology='ico',
+    )
+    assert len(cb.surface_indices) == 12
+
+
+def test_create_cell_body_ico_topology_field():
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=[0.0, 0.0, 0.0], radius=1.0, positions=positions, topology='ico',
+    )
+    assert cb.topology == 'ico'
+
+
+def test_create_cell_body_default_topology_is_oct():
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=[0.0, 0.0, 0.0], radius=1.0, positions=positions,
+    )
+    assert cb.topology == 'oct'
+
+
+def test_create_cell_body_ico_volume_range():
+    # Unit-sphere icosahedron volume ~= 2.536; must exceed octahedron (4/3) and be
+    # below sphere (4.189).
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=[0.0, 0.0, 0.0], radius=1.0, positions=positions, topology='ico',
+    )
+    assert 2.0 < cb.target_volume < 3.0
+
+
+def test_create_cell_body_ico_face_count():
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=[0.0, 0.0, 0.0], radius=1.0, positions=positions, topology='ico',
+    )
+    assert len(cb.triangles) == 20
+
+
+def test_create_cell_body_ico_edge_count():
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=[0.0, 0.0, 0.0], radius=1.0, positions=positions, topology='ico',
+    )
+    assert len(cb.edges) == 30

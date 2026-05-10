@@ -175,7 +175,9 @@ class CellBody:
         edges=None,
         name=None,
         orientation=None,
+        topology='oct',
     ):
+        self.topology = topology
         self.name = name
         self.orientation = orientation if orientation is not None else np.eye(3)
         self.center_idx = center_idx
@@ -206,7 +208,9 @@ class CellBody:
 
 
 def create_cell_body(
-    center, radius, positions, membrane_compliance=0.01, area_threshold=None, name=None, orientation=None
+    center, radius, positions, membrane_compliance=0.01,
+    area_threshold=None, name=None, orientation=None,
+    topology='oct',
 ):
     """
     Create a CellBody and append its particles to the positions array.
@@ -227,7 +231,11 @@ def create_cell_body(
     n = len(positions)
 
     # Determine mesh topology
-    if area_threshold is not None:
+    if topology == 'ico':
+        dirs = ICOSAHEDRON_DIRS
+        triangles = ICOSAHEDRON_TRIANGLES
+        edges = ICOSAHEDRON_EDGES
+    elif area_threshold is not None:
         unit_threshold = area_threshold / (radius * radius)
         dirs, triangles = subdivide_mesh(OCTAHEDRON_DIRS, OCTAHEDRON_TRIANGLES, unit_threshold)
         edges = compute_edges(triangles)
@@ -283,6 +291,7 @@ def create_cell_body(
         edges=edges,
         name=name,
         orientation=orientation if orientation is not None else np.eye(3),
+        topology=topology,
     )
 
     return cell_body, new_positions
