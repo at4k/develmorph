@@ -193,4 +193,4 @@ def test_divide_ico_daughters_correct_volume():
     axis = np.array([1.0, 0.0, 0.0])
     daughters, positions = divide_cell_body(cb, positions, axis=axis)
     total_daughter_volume = daughters[0].target_volume + daughters[1].target_volume
-    np.testing.assert_allclose(total_daughter_volume, parent_volume, rtol=0.01)
+    np.testing.assert_allclose(total_daughter_volume, parent_volume, rtol=1e-10)
