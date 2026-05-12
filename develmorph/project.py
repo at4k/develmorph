@@ -365,3 +365,62 @@ class DistanceConstraint:
         x[self.j] -= delta_lambda * inv_masses[self.j] * grad
 
         return lambda_acc
+
+
+class TriangleAreaConstraint:
+    """
+    XPBD inequality constraint: triangle area <= target_area.
+
+    Fires only when A > A_target (stretch prevention).
+    Compression is permitted — membranes can fold but not stretch.
+
+    Indices i0, i1, i2 are surface particle indices (center excluded).
+    """
+
+    def __init__(
+        self, i0: int, i1: int, i2: int, target_area: float, compliance: float = 0.0
+    ):
+        self.i0 = i0
+        self.i1 = i1
+        self.i2 = i2
+        self.target_area = target_area
+        self.compliance = compliance
+
+    def project(self, x, inv_masses, dt, lambda_acc):
+        p0 = x[self.i0]
+        p1 = x[self.i1]
+        p2 = x[self.i2]
+        n_unnorm = np.cross(p1 - p0, p2 - p0)
+        area2 = np.linalg.norm(n_unnorm)
+        if area2 < 1e-12:
+            return lambda_acc
+
+        A = 0.5 * area2
+        C = A - self.target_area
+
+        # Inequality: only correct when area exceeds target
+        if C <= 0.0:
+            return lambda_acc
+
+        n_hat = n_unnorm / area2
+        grad0 = 0.5 * np.cross(p1 - p2, n_hat)
+        grad1 = 0.5 * np.cross(p2 - p0, n_hat)
+        grad2 = 0.5 * np.cross(p0 - p1, n_hat)
+
+        w_grad_sq = (
+            inv_masses[self.i0] * np.dot(grad0, grad0)
+            + inv_masses[self.i1] * np.dot(grad1, grad1)
+            + inv_masses[self.i2] * np.dot(grad2, grad2)
+        )
+        if w_grad_sq < 1e-12:
+            return lambda_acc
+
+        alpha_tilde = self.compliance / (dt * dt) if dt > 0 else 0.0
+        delta_lambda = (-C - alpha_tilde * lambda_acc) / (w_grad_sq + alpha_tilde)
+        lambda_acc += delta_lambda
+
+        x[self.i0] += delta_lambda * inv_masses[self.i0] * grad0
+        x[self.i1] += delta_lambda * inv_masses[self.i1] * grad1
+        x[self.i2] += delta_lambda * inv_masses[self.i2] * grad2
+
+        return lambda_acc

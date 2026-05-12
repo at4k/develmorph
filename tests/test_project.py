@@ -8,6 +8,7 @@ from develmorph.project import (
     CollisionConstraint,
     DistanceConstraint,
     ShellConstraint,
+    TriangleAreaConstraint,
     VolumeConstraint,
 )
 
@@ -385,3 +386,48 @@ def test_adhesion_compliance_softens():
     err_soft = abs(np.linalg.norm(x_soft[0] - x_soft[1]) - 1.0)
 
     assert err_hard < err_soft
+
+
+def test_triangle_area_no_correction_at_rest():
+    """No correction when area equals target."""
+    x = np.array([
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+    ], dtype=float)
+    x_before = x.copy()
+    inv_masses = np.ones(3)
+    c = TriangleAreaConstraint(0, 1, 2, target_area=0.5, compliance=0.0)
+    c.project(x, inv_masses, dt=0.01, lambda_acc=0.0)
+    np.testing.assert_array_almost_equal(x, x_before)
+
+
+def test_triangle_area_corrects_stretch():
+    """Correction fires and restores area when triangle is stretched."""
+    x = np.array([
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 2.0, 0.0],  # area = 1.0, target = 0.5
+    ], dtype=float)
+    inv_masses = np.ones(3)
+    c = TriangleAreaConstraint(0, 1, 2, target_area=0.5, compliance=0.0)
+    lam = 0.0
+    for _ in range(20):
+        lam = c.project(x, inv_masses, dt=0.01, lambda_acc=lam)
+    n = np.cross(x[1] - x[0], x[2] - x[0])
+    area = 0.5 * np.linalg.norm(n)
+    assert area <= 0.5 * 1.01
+
+
+def test_triangle_area_no_correction_on_compression():
+    """No correction when area is below target (inequality: stretch only)."""
+    x = np.array([
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 0.5, 0.0],  # area = 0.25 < target 0.5
+    ], dtype=float)
+    x_before = x.copy()
+    inv_masses = np.ones(3)
+    c = TriangleAreaConstraint(0, 1, 2, target_area=0.5, compliance=0.0)
+    c.project(x, inv_masses, dt=0.01, lambda_acc=0.0)
+    np.testing.assert_array_equal(x, x_before)
