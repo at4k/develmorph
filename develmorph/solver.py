@@ -38,8 +38,8 @@ def _update_adhesion_pairs(
             continue
         ci = cell_bodies[i]
         cj = cell_bodies[j]
-        ri = (3.0 * ci.target_volume / 4.0) ** (1.0 / 3.0)
-        rj = (3.0 * cj.target_volume / 4.0) ** (1.0 / 3.0)
+        ri = ci.nominal_radius()
+        rj = cj.nominal_radius()
         dist = np.linalg.norm(positions[ci.center_idx] - positions[cj.center_idx])
         if dist > ri + rj + detach_margin:
             to_remove.add((i, j))
@@ -52,8 +52,8 @@ def _update_adhesion_pairs(
                 continue
             ci = cell_bodies[i]
             cj = cell_bodies[j]
-            ri = (3.0 * ci.target_volume / 4.0) ** (1.0 / 3.0)
-            rj = (3.0 * cj.target_volume / 4.0) ** (1.0 / 3.0)
+            ri = ci.nominal_radius()
+            rj = cj.nominal_radius()
             dist = np.linalg.norm(positions[ci.center_idx] - positions[cj.center_idx])
             if dist < ri + rj + attach_margin:
                 active_adhesions.add((i, j))
@@ -77,6 +77,7 @@ def step(
     shell_compliance=0.0,
     collision_compliance=0.0,
     contact_overlap=0.0,
+    surface_contact_compliance=None,
 ):
     """
     Advance physical state by one time step using XPBD.
@@ -146,7 +147,7 @@ def step(
         # Shell constraints: center + surface points.
         # Use nominal radius from target_volume to avoid instability when
         # membrane deformation temporarily inflates _max_surface_dist.
-        nominal_r = (3.0 * cb.target_volume / 4.0) ** (1.0 / 3.0)
+        nominal_r = cb.nominal_radius()
         shell_constraints.append(
             ShellConstraint(cb.center_idx, *shell_params, nominal_r, shell_compliance)
         )
@@ -163,8 +164,8 @@ def step(
         for j in range(i + 1, len(cell_bodies)):
             ci = cell_bodies[i]
             cj = cell_bodies[j]
-            ri = (3.0 * ci.target_volume / 4.0) ** (1.0 / 3.0)
-            rj = (3.0 * cj.target_volume / 4.0) ** (1.0 / 3.0)
+            ri = ci.nominal_radius()
+            rj = cj.nominal_radius()
             collision_constraints.append(
                 CollisionConstraint(
                     ci.center_idx, cj.center_idx,
@@ -186,8 +187,8 @@ def step(
                     continue
                 ci = cell_bodies[i]
                 cj = cell_bodies[j]
-                ri = (3.0 * ci.target_volume / 4.0) ** (1.0 / 3.0)
-                rj = (3.0 * cj.target_volume / 4.0) ** (1.0 / 3.0)
+                ri = ci.nominal_radius()
+                rj = cj.nominal_radius()
                 center_dist = np.linalg.norm(
                     positions[ci.center_idx] - positions[cj.center_idx]
                 )
@@ -206,8 +207,8 @@ def step(
             for j in range(i + 1, len(cell_bodies)):
                 ci = cell_bodies[i]
                 cj = cell_bodies[j]
-                ri = (3.0 * ci.target_volume / 4.0) ** (1.0 / 3.0)
-                rj = (3.0 * cj.target_volume / 4.0) ** (1.0 / 3.0)
+                ri = ci.nominal_radius()
+                rj = cj.nominal_radius()
                 center_dist = np.linalg.norm(
                     positions[ci.center_idx] - positions[cj.center_idx]
                 )
@@ -235,8 +236,8 @@ def step(
         for i, j in active_adhesions:
             ci = cell_bodies[i]
             cj = cell_bodies[j]
-            ri = (3.0 * ci.target_volume / 4.0) ** (1.0 / 3.0)
-            rj = (3.0 * cj.target_volume / 4.0) ** (1.0 / 3.0)
+            ri = ci.nominal_radius()
+            rj = cj.nominal_radius()
             adhesion_constraints.append(
                 AdhesionConstraint(
                     ci.center_idx, cj.center_idx,
@@ -244,15 +245,41 @@ def step(
                 )
             )
 
-    # Ordered: volume -> distance -> adhesion -> collision -> surface_penetration -> shell
-    # Volume first, then distance restores membrane shape; surface penetration after
-    # collision so center positions are settled before surface points are corrected.
+    # Surface contact adhesion: pull nearby surface particles of adjacent cells
+    # toward each other. Applied after HalfSpaceConstraints so particles are
+    # attracted to the contact plane without crossing it.
+    surface_contact_constraints = []
+    if surface_contact_compliance is not None:
+        for i in range(len(cell_bodies)):
+            for j in range(i + 1, len(cell_bodies)):
+                ci = cell_bodies[i]
+                cj = cell_bodies[j]
+                ri = ci.nominal_radius()
+                rj = cj.nominal_radius()
+                center_dist = np.linalg.norm(
+                    positions[ci.center_idx] - positions[cj.center_idx]
+                )
+                if center_dist > ri + rj + 0.3 or center_dist < 1e-9:
+                    continue
+                cutoff = (ri + rj) * 0.5
+                for si in ci.surface_indices:
+                    for sj in cj.surface_indices:
+                        d = np.linalg.norm(positions[si] - positions[sj])
+                        if d < cutoff:
+                            surface_contact_constraints.append(
+                                AdhesionConstraint(si, sj, 0.0, surface_contact_compliance)
+                            )
+
+    # Ordered: volume -> distance -> adhesion -> collision -> surface_penetration
+    #          -> surface_contact -> shell
+    # surface_contact after HalfSpace: repulsion is settled before attraction fires.
     all_constraints = (
         volume_constraints
         + distance_constraints
         + adhesion_constraints
         + collision_constraints
         + surface_penetration_constraints
+        + surface_contact_constraints
         + shell_constraints
     )
 

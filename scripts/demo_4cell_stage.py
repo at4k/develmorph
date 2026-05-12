@@ -51,6 +51,7 @@ def run_simulation(diamond=False, n_settle_steps=300, record_every=5):
         radius=1.1,
         positions=positions,
         name="P0",
+        topology='ico',
     )
 
     # Eggshell dimensions from Kajita et al. 2003, Table 1:
@@ -69,6 +70,7 @@ def run_simulation(diamond=False, n_settle_steps=300, record_every=5):
         membrane_compliance=0.02,
         volume_compliance=0.1,
         contact_overlap=0.10,
+        surface_contact_compliance=0.1,
     )
 
     frames = []  # list of (positions_copy, [(name, center_idx, surface_indices, target_volume)])

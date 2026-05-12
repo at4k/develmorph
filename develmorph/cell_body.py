@@ -199,6 +199,11 @@ class CellBody:
         """Return all particle indices belonging to this cell."""
         return [self.center_idx] + self.surface_indices
 
+    def nominal_radius(self):
+        """Radius inferred from target_volume using topology-specific volume factor."""
+        vol_factor = TOPOLOGY_VOLUME_FACTOR[self.topology]
+        return (self.target_volume / vol_factor) ** (1.0 / 3.0)
+
     def surface_global_triangles(self):
         """Return triangles with global particle indices."""
         return [
