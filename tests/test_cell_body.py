@@ -477,3 +477,14 @@ def test_create_cell_body_ico_edge_count():
         center=[0.0, 0.0, 0.0], radius=1.0, positions=positions, topology='ico',
     )
     assert len(cb.edges) == 30
+
+
+def test_create_cell_body_oct_face_areas():
+    """create_cell_body stores one face area per triangle (8 for oct)."""
+    positions = np.zeros((0, 3))
+    cb, _ = create_cell_body(center=np.zeros(3), radius=1.0, positions=positions)
+    assert len(cb.face_areas) == 8
+    # Octahedron r=1: each face is equilateral with side sqrt(2), area = sqrt(3)/2
+    expected = math.sqrt(3) / 2
+    for area in cb.face_areas:
+        assert abs(area - expected) < 1e-10
