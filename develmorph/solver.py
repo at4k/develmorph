@@ -6,6 +6,7 @@ from develmorph.project import (
     DistanceConstraint,
     HalfSpaceConstraint,
     ShellConstraint,
+    TriangleAreaConstraint,
     VolumeConstraint,
 )
 
@@ -78,6 +79,7 @@ def step(
     collision_compliance=0.0,
     contact_overlap=0.0,
     surface_contact_compliance=None,
+    area_compliance=None,
 ):
     """
     Advance physical state by one time step using XPBD.
@@ -153,6 +155,19 @@ def step(
         )
         for si in cb.surface_indices:
             shell_constraints.append(ShellConstraint(si, *shell_params, 0.0, shell_compliance))
+
+    # Area constraints: per-triangle stretch prevention.
+    # None = disabled (backward compatible). Fires only when A > A_target.
+    area_constraints = []
+    if area_compliance is not None:
+        for cb in cell_bodies:
+            for (a, b, c), target_a in zip(cb.triangles, cb.face_areas):
+                i0 = cb.surface_indices[a]
+                i1 = cb.surface_indices[b]
+                i2 = cb.surface_indices[c]
+                area_constraints.append(
+                    TriangleAreaConstraint(i0, i1, i2, target_a, area_compliance)
+                )
 
     # Collision constraints: center-to-center repulsion.
     # When contact_overlap > 0, equilibrium distance is shrunk so centers overlap
@@ -270,12 +285,13 @@ def step(
                                 AdhesionConstraint(si, sj, 0.0, surface_contact_compliance)
                             )
 
-    # Ordered: volume -> distance -> adhesion -> collision -> surface_penetration
+    # Ordered: volume -> distance -> area -> adhesion -> collision -> surface_penetration
     #          -> surface_contact -> shell
     # surface_contact after HalfSpace: repulsion is settled before attraction fires.
     all_constraints = (
         volume_constraints
         + distance_constraints
+        + area_constraints
         + adhesion_constraints
         + collision_constraints
         + surface_penetration_constraints
