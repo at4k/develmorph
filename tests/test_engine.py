@@ -144,3 +144,18 @@ def test_world_ico_cell_preserves_approximate_volume():
     world.run(20)
     # target_volume is a constraint target set at creation — it does not change
     assert world.cell_bodies[0].target_volume == initial_target
+
+
+def test_world_area_compliance_runs():
+    """World with area_compliance runs without error."""
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=np.zeros(3), radius=1.0, positions=positions
+    )
+    world = World(
+        cell_bodies=[cb],
+        positions=positions,
+        area_compliance=0.01,
+    )
+    world.run(5)
+    assert np.all(np.isfinite(world.positions))
