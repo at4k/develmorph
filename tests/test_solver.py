@@ -391,3 +391,26 @@ def test_step_with_area_compliance():
         n_iter=10,
     )
     assert np.all(np.isfinite(new_pos))
+
+
+def test_step_with_area_compliance_ico():
+    """step() with area_compliance and ico topology runs without error."""
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=np.zeros(3), radius=1.0, positions=positions, topology='ico'
+    )
+    vel = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
+
+    new_pos, _ = step(
+        positions=positions,
+        velocities=vel,
+        inv_masses=inv_masses,
+        dt=0.01,
+        cell_bodies=[cb],
+        shell_params=(5.0, 5.0, 5.0),
+        area_compliance=0.01,
+        n_iter=10,
+    )
+    assert np.all(np.isfinite(new_pos))
+    assert len(cb.face_areas) == 20

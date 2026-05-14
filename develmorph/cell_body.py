@@ -281,8 +281,8 @@ def create_cell_body(
         p0 = new_positions[surface_indices[a]]
         p1 = new_positions[surface_indices[b]]
         p2 = new_positions[surface_indices[c]]
-        n = np.cross(p1 - p0, p2 - p0)
-        face_areas.append(0.5 * np.linalg.norm(n))
+        cross_vec = np.cross(p1 - p0, p2 - p0)
+        face_areas.append(0.5 * np.linalg.norm(cross_vec))
 
     # Compute rest lengths from initial geometry
     center_surface_rest = [
