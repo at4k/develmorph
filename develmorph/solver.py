@@ -104,6 +104,12 @@ def step(
         damping: velocity damping factor [0.0, 1.0]. 0.0 = fully inertial,
             1.0 = fully overdamped (zero velocity carry-over between steps).
             Use 1.0 for biological cells (low Reynolds number / viscosity-dominated).
+        area_compliance: compliance for per-triangle stretch prevention. None (default)
+            disables it; when set, applies TriangleAreaConstraint to each face.
+        tet_volume_compliance: compliance for per-tetrahedron volume constraints.
+            When set, replaces VolumeConstraint + DistanceConstraint +
+            TriangleAreaConstraint with one TetrahedralVolumeConstraint per
+            surface triangle. None (default) preserves the old path.
 
     Returns:
         (new_positions, new_velocities)
@@ -303,10 +309,10 @@ def step(
                                 AdhesionConstraint(si, sj, 0.0, surface_contact_compliance)
                             )
 
-    # Ordered: volume -> distance -> area -> adhesion -> collision -> surface_penetration
-    #          -> surface_contact -> shell
-    # surface_contact after HalfSpace: repulsion is settled before attraction fires.
+    # Ordered: tet -> volume -> distance -> area -> adhesion -> collision
+    #          -> surface_penetration -> surface_contact -> shell
     # tet and (volume+distance+area) are mutually exclusive (one set will be empty).
+    # surface_contact after HalfSpace: repulsion is settled before attraction fires.
     all_constraints = (
         tet_constraints
         + volume_constraints
