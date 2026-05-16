@@ -180,15 +180,18 @@ def step(
                     )
 
     # Shell constraints: center + surface points.
-    # Use nominal radius from target_volume to avoid instability when
-    # membrane deformation temporarily inflates _max_surface_dist.
-    # Built separately so they apply regardless of which volume branch is active.
+    # Center uses margin=0 (full shell boundary) so it is not pushed inward
+    # when the cell rests near the wall.  Surface particles each have their
+    # own shell constraint (margin=0) and keep the surface inside independently.
+    # Using nominal_r for the center caused ABp-style center drift in tightly
+    # packed configurations because the shrunk effective shell (a-r, b-r, c-r)
+    # lay inside the natural cell position, generating a persistent inward push.
     collision_constraints = []
     shell_constraints = []
     for cb in cell_bodies:
         nominal_r = cb.nominal_radius()
         shell_constraints.append(
-            ShellConstraint(cb.center_idx, *shell_params, nominal_r, shell_compliance)
+            ShellConstraint(cb.center_idx, *shell_params, 0.0, shell_compliance)
         )
         for si in cb.surface_indices:
             shell_constraints.append(ShellConstraint(si, *shell_params, 0.0, shell_compliance))
@@ -331,12 +334,20 @@ def step(
         for k, c in enumerate(all_constraints):
             lambdas[k] = c.project(x, inv_masses, dt, lambdas[k])
 
-    # 3b. Inversion guard: if the signed mesh volume goes negative the center
-    # has escaped outside the surface hull, reversing all restoring forces.
-    # Snap it to the surface centroid so the next step starts from a valid state.
+    # 3b. Inversion guard: if the center has escaped outside the surface hull
+    # the center-relative tetrahedra volume goes non-positive, reversing all
+    # restoring forces.  Snap center to surface centroid so the next step
+    # starts from a valid state.
+    # Uses the center-relative formula (a = pi - pc) to detect hull escape.
+    # The origin-based formula dot(pi, cross(pj, pk)) stays positive even when
+    # the center is outside, so it cannot detect this condition.
     for cb in cell_bodies:
+        pc = x[cb.center_idx]
         tris = cb.surface_global_triangles()
-        vol = sum(np.dot(x[i0], np.cross(x[i1], x[i2])) for i0, i1, i2 in tris) / 6.0
+        vol = sum(
+            np.dot(x[i0] - pc, np.cross(x[i1] - pc, x[i2] - pc))
+            for i0, i1, i2 in tris
+        ) / 6.0
         if vol <= 0.0:
             x[cb.center_idx] = x[np.array(cb.surface_indices)].mean(axis=0)
 

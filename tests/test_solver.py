@@ -487,3 +487,95 @@ def test_step_backward_compat_no_tet_param():
     )
     assert new_pos.shape == positions.shape
     assert new_vel.shape == velocities.shape
+
+
+def test_center_not_pushed_inward_by_shell():
+    """Center must not drift inward when it is already inside the full shell.
+
+    Regression for ABp collapse: the shell constraint for center was using
+    nominal_r as margin, creating an effective boundary at (a - nominal_r,
+    b - nominal_r, c - nominal_r).  When the center is inside the full shell
+    but outside this shrunk boundary the constraint fires and keeps pushing
+    center toward the interior.  Fix: center uses margin=0 (full shell).
+    """
+    # Cell near the Y wall.  nominal_r for radius=0.76 ico cell ≈ 0.76.
+    # Effective Y shell with old margin = 1.26 - 0.76 = 0.50.
+    # Center at y=0.60 is inside full shell (< 1.26) but outside shrunk shell (> 0.50).
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=np.array([0.0, 0.60, 0.0]),
+        radius=0.76,
+        positions=positions,
+        topology='ico',
+    )
+    vel = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
+
+    shell = (1.84, 1.26, 1.04)
+
+    new_pos = positions.copy()
+    new_vel = vel.copy()
+    for _ in range(100):
+        new_pos, new_vel = step(
+            positions=new_pos,
+            velocities=new_vel,
+            inv_masses=inv_masses,
+            dt=0.01,
+            cell_bodies=[cb],
+            shell_params=shell,
+            n_iter=10,
+            shell_compliance=0.001,
+            damping=1.0,
+        )
+
+    center_y = new_pos[cb.center_idx][1]
+    # With fix: center is inside full shell, shell fires only for surface
+    # particles above y=1.26.  Center stays near y≈0.60.
+    # Without fix: shell pushes center to effective boundary ≈ y=0.50.
+    assert center_y > 0.55, (
+        f"Center drifted too far inward: y={center_y:.3f} (expected > 0.55). "
+        "Shell constraint is using nominal_r margin for center."
+    )
+
+
+def test_center_volume_stable_near_shell_wall():
+    """V_center must remain healthy when cell rests near the shell wall.
+
+    Regression for ABp collapse: after 50 settling steps V_center dropped
+    to ~35% of target because center escaped the surface hull.
+    """
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=np.array([0.0, 0.60, 0.0]),
+        radius=0.76,
+        positions=positions,
+        topology='ico',
+    )
+    vel = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
+
+    shell = (1.84, 1.26, 1.04)
+
+    new_pos = positions.copy()
+    new_vel = vel.copy()
+    for _ in range(50):
+        new_pos, new_vel = step(
+            positions=new_pos,
+            velocities=new_vel,
+            inv_masses=inv_masses,
+            dt=0.01,
+            cell_bodies=[cb],
+            shell_params=shell,
+            n_iter=20,
+            shell_compliance=0.001,
+            volume_compliance=0.1,
+            membrane_compliance=0.02,
+            damping=1.0,
+        )
+
+    vol = _actual_volume(new_pos, cb)
+    ratio = vol / cb.target_volume
+    assert ratio > 0.5, (
+        f"V_center collapsed: ratio={ratio:.3f}. "
+        "Center escaped surface hull (ABp regression)."
+    )

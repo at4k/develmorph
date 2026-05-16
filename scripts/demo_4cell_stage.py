@@ -48,7 +48,7 @@ def run_simulation(diamond=False, n_settle_steps=300, record_every=5):
     positions = np.zeros((0, 3))
     p0, positions = create_cell_body(
         center=np.array([0.0, 0.0, 0.0]),
-        radius=1.1,
+        radius=1.136,
         positions=positions,
         name="P0",
         topology='ico',
@@ -71,6 +71,7 @@ def run_simulation(diamond=False, n_settle_steps=300, record_every=5):
         volume_compliance=0.1,
         contact_overlap=0.10,
         surface_contact_compliance=0.1,
+        area_compliance=0.0,
     )
 
     frames = []  # list of (positions_copy, [(name, center_idx, surface_indices, target_volume)])
