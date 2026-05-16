@@ -159,3 +159,21 @@ def test_world_area_compliance_runs():
     )
     world.run(5)
     assert np.all(np.isfinite(world.positions))
+
+
+def test_world_tet_volume_compliance_wired():
+    """World accepts and forwards tet_volume_compliance parameter."""
+    positions = np.zeros((0, 3))
+    cb, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=positions,
+    )
+    world = World(
+        cell_bodies=[cb],
+        positions=positions,
+        tet_volume_compliance=0.01,
+        damping=1.0,
+    )
+    world.step()
+    assert world.positions.shape == positions.shape
