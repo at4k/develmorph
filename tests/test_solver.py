@@ -414,3 +414,76 @@ def test_step_with_area_compliance_ico():
     )
     assert np.all(np.isfinite(new_pos))
     assert len(cb.face_areas) == 20
+
+
+def _actual_volume(positions, cb):
+    total = 0.0
+    for a, b, c in cb.triangles:
+        p0 = positions[cb.surface_indices[a]] - positions[cb.center_idx]
+        p1 = positions[cb.surface_indices[b]] - positions[cb.center_idx]
+        p2 = positions[cb.surface_indices[c]] - positions[cb.center_idx]
+        total += np.dot(p0, np.cross(p1, p2)) / 6.0
+    return total
+
+
+def test_step_tet_volume_single_cell_stable():
+    cb, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=np.empty((0, 3)),
+    )
+    velocities = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
+    target_vol = cb.target_volume
+
+    for _ in range(100):
+        positions, velocities = step(
+            positions, velocities, inv_masses, dt=0.01,
+            cell_bodies=[cb],
+            shell_params=(10.0, 10.0, 10.0),
+            n_iter=10,
+            tet_volume_compliance=0.01,
+            damping=1.0,
+        )
+
+    assert abs(_actual_volume(positions, cb) - target_vol) / target_vol < 0.05
+
+
+def test_step_tet_volume_two_cell_collision():
+    cb1, pos = create_cell_body(np.array([-0.5, 0.0, 0.0]), 1.0, np.empty((0, 3)))
+    cb2, pos = create_cell_body(np.array([0.5, 0.0, 0.0]), 1.0, pos)
+    velocities = np.zeros_like(pos)
+    inv_masses = np.ones(len(pos))
+
+    for _ in range(100):
+        pos, velocities = step(
+            pos, velocities, inv_masses, dt=0.01,
+            cell_bodies=[cb1, cb2],
+            shell_params=(10.0, 10.0, 10.0),
+            n_iter=10,
+            tet_volume_compliance=0.01,
+            damping=1.0,
+        )
+
+    for cb in [cb1, cb2]:
+        actual = _actual_volume(pos, cb)
+        assert abs(actual - cb.target_volume) / cb.target_volume < 0.1
+
+
+def test_step_backward_compat_no_tet_param():
+    cb, positions = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=np.empty((0, 3)),
+    )
+    velocities = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
+
+    new_pos, new_vel = step(
+        positions, velocities, inv_masses, dt=0.01,
+        cell_bodies=[cb],
+        shell_params=(10.0, 10.0, 10.0),
+        n_iter=5,
+    )
+    assert new_pos.shape == positions.shape
+    assert new_vel.shape == velocities.shape

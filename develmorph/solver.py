@@ -6,6 +6,7 @@ from develmorph.project import (
     DistanceConstraint,
     HalfSpaceConstraint,
     ShellConstraint,
+    TetrahedralVolumeConstraint,
     TriangleAreaConstraint,
     VolumeConstraint,
 )
@@ -80,6 +81,7 @@ def step(
     contact_overlap=0.0,
     surface_contact_compliance=None,
     area_compliance=None,
+    tet_volume_compliance=None,
 ):
     """
     Advance physical state by one time step using XPBD.
@@ -112,62 +114,78 @@ def step(
     x = positions + dt * velocities
 
     # 2. Build constraints in priority order
+    # New path: per-tetrahedron volume constraints (tet_volume_compliance is not None)
+    # Old path: VolumeConstraint + DistanceConstraint + TriangleAreaConstraint
+    tet_constraints = []
     volume_constraints = []
     distance_constraints = []
+    area_constraints = []
+
+    if tet_volume_compliance is not None:
+        for cb in cell_bodies:
+            for (a, b, c), v_target in zip(cb.triangles, cb.face_volumes):
+                i0 = cb.surface_indices[a]
+                i1 = cb.surface_indices[b]
+                i2 = cb.surface_indices[c]
+                tet_constraints.append(
+                    TetrahedralVolumeConstraint(
+                        cb.center_idx, i0, i1, i2, v_target, tet_volume_compliance
+                    )
+                )
+    else:
+        for cb in cell_bodies:
+            volume_constraints.append(
+                VolumeConstraint(
+                    center_idx=cb.center_idx,
+                    surface_indices=cb.surface_indices,
+                    triangles=cb.surface_global_triangles(),
+                    target_volume=cb.target_volume,
+                    compliance=volume_compliance,
+                )
+            )
+
+            # Distance constraints: center-surface
+            # Stiffer than surface-surface so the center tracks the cell, but soft
+            # enough (alpha_tilde = 10) that SurfacePenetrationConstraint
+            # (alpha_tilde = 0, 12x stronger per iter) can overcome it and produce
+            # visible contact-zone flattening.
+            center_compliance = 0.001
+            for (ci, si), rest_len in zip(cb.center_surface_edges, cb.center_surface_rest):
+                distance_constraints.append(
+                    DistanceConstraint(ci, si, rest_len, center_compliance)
+                )
+
+            # Distance constraints: surface-surface (deformable membrane)
+            for (a, b), rest_len in zip(cb.surface_surface_edges, cb.surface_surface_rest):
+                distance_constraints.append(
+                    DistanceConstraint(a, b, rest_len, membrane_compliance)
+                )
+
+        # Area constraints: per-triangle stretch prevention.
+        # None = disabled (backward compatible). Fires only when A > A_target.
+        if area_compliance is not None:
+            for cb in cell_bodies:
+                for (a, b, c), target_a in zip(cb.triangles, cb.face_areas):
+                    i0 = cb.surface_indices[a]
+                    i1 = cb.surface_indices[b]
+                    i2 = cb.surface_indices[c]
+                    area_constraints.append(
+                        TriangleAreaConstraint(i0, i1, i2, target_a, area_compliance)
+                    )
+
+    # Shell constraints: center + surface points.
+    # Use nominal radius from target_volume to avoid instability when
+    # membrane deformation temporarily inflates _max_surface_dist.
+    # Built separately so they apply regardless of which volume branch is active.
     collision_constraints = []
     shell_constraints = []
-
     for cb in cell_bodies:
-        # Volume constraint (per cell)
-        volume_constraints.append(
-            VolumeConstraint(
-                center_idx=cb.center_idx,
-                surface_indices=cb.surface_indices,
-                triangles=cb.surface_global_triangles(),
-                target_volume=cb.target_volume,
-                compliance=volume_compliance,
-            )
-        )
-
-        # Distance constraints: center-surface
-        # Stiffer than surface-surface so the center tracks the cell, but soft
-        # enough (alpha_tilde = 10) that SurfacePenetrationConstraint
-        # (alpha_tilde = 0, 12x stronger per iter) can overcome it and produce
-        # visible contact-zone flattening.
-        center_compliance = 0.001
-        for (ci, si), rest_len in zip(cb.center_surface_edges, cb.center_surface_rest):
-            distance_constraints.append(
-                DistanceConstraint(ci, si, rest_len, center_compliance)
-            )
-
-        # Distance constraints: surface-surface (deformable membrane)
-        for (a, b), rest_len in zip(cb.surface_surface_edges, cb.surface_surface_rest):
-            distance_constraints.append(
-                DistanceConstraint(a, b, rest_len, membrane_compliance)
-            )
-
-        # Shell constraints: center + surface points.
-        # Use nominal radius from target_volume to avoid instability when
-        # membrane deformation temporarily inflates _max_surface_dist.
         nominal_r = cb.nominal_radius()
         shell_constraints.append(
             ShellConstraint(cb.center_idx, *shell_params, nominal_r, shell_compliance)
         )
         for si in cb.surface_indices:
             shell_constraints.append(ShellConstraint(si, *shell_params, 0.0, shell_compliance))
-
-    # Area constraints: per-triangle stretch prevention.
-    # None = disabled (backward compatible). Fires only when A > A_target.
-    area_constraints = []
-    if area_compliance is not None:
-        for cb in cell_bodies:
-            for (a, b, c), target_a in zip(cb.triangles, cb.face_areas):
-                i0 = cb.surface_indices[a]
-                i1 = cb.surface_indices[b]
-                i2 = cb.surface_indices[c]
-                area_constraints.append(
-                    TriangleAreaConstraint(i0, i1, i2, target_a, area_compliance)
-                )
 
     # Collision constraints: center-to-center repulsion.
     # When contact_overlap > 0, equilibrium distance is shrunk so centers overlap
@@ -288,8 +306,10 @@ def step(
     # Ordered: volume -> distance -> area -> adhesion -> collision -> surface_penetration
     #          -> surface_contact -> shell
     # surface_contact after HalfSpace: repulsion is settled before attraction fires.
+    # tet and (volume+distance+area) are mutually exclusive (one set will be empty).
     all_constraints = (
-        volume_constraints
+        tet_constraints
+        + volume_constraints
         + distance_constraints
         + area_constraints
         + adhesion_constraints
