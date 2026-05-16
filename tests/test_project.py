@@ -8,6 +8,7 @@ from develmorph.project import (
     CollisionConstraint,
     DistanceConstraint,
     ShellConstraint,
+    TetrahedralVolumeConstraint,
     TriangleAreaConstraint,
     VolumeConstraint,
 )
@@ -431,3 +432,127 @@ def test_triangle_area_no_correction_on_compression():
     c = TriangleAreaConstraint(0, 1, 2, target_area=0.5, compliance=0.0)
     c.project(x, inv_masses, dt=0.01, lambda_acc=0.0)
     np.testing.assert_array_equal(x, x_before)
+
+
+def test_tet_volume_constraint_basic():
+    # Tetrahedron: center at origin, ideal triangle at unit axes.
+    # V_ideal = dot((1,0,0), cross((0,1,0),(0,0,1))) / 6 = 1/6
+    x = np.array([
+        [0.0, 0.0, 0.0],  # center (idx 0)
+        [1.0, 0.0, 0.0],  # p0    (idx 1)
+        [0.0, 1.0, 0.0],  # p1    (idx 2)
+        [0.0, 0.0, 1.0],  # p2    (idx 3)
+    ], dtype=float)
+    inv_masses = np.ones(4)
+    target_v = 1.0 / 6.0
+
+    # Compress: move p0 inward so V < target
+    x[1] = [0.5, 0.0, 0.0]
+    a = x[1] - x[0]; b = x[2] - x[0]; c = x[3] - x[0]
+    v_before = np.dot(a, np.cross(b, c)) / 6.0
+    assert v_before < target_v
+
+    constraint = TetrahedralVolumeConstraint(0, 1, 2, 3, target_v, compliance=0.0)
+    lambda_acc = 0.0
+    for _ in range(20):
+        lambda_acc = constraint.project(x, inv_masses, 0.01, lambda_acc)
+
+    a = x[1] - x[0]; b = x[2] - x[0]; c = x[3] - x[0]
+    v_after = np.dot(a, np.cross(b, c)) / 6.0
+    assert abs(v_after - target_v) < abs(v_before - target_v) * 0.1
+
+
+def test_tet_volume_constraint_gradient():
+    # Verify dV/dpc = -(g0 + g1 + g2) via numerical differentiation.
+    x = np.array([
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ], dtype=float)
+
+    def vol(pos):
+        a = pos[1] - pos[0]; b = pos[2] - pos[0]; c = pos[3] - pos[0]
+        return np.dot(a, np.cross(b, c)) / 6.0
+
+    eps = 1e-6
+    num_grad_c = np.zeros(3)
+    for d in range(3):
+        xp = x.copy(); xp[0, d] += eps
+        xm = x.copy(); xm[0, d] -= eps
+        num_grad_c[d] = (vol(xp) - vol(xm)) / (2 * eps)
+
+    a = x[1] - x[0]; b = x[2] - x[0]; c = x[3] - x[0]
+    g0 = np.cross(b, c) / 6.0
+    g1 = np.cross(c, a) / 6.0
+    g2 = np.cross(a, b) / 6.0
+    gc_analytic = -(g0 + g1 + g2)
+
+    np.testing.assert_allclose(gc_analytic, num_grad_c, atol=1e-5)
+
+
+def test_tet_volume_constraint_equality():
+    # With compliance=0, many iterations converge volume to target.
+    x = np.array([
+        [0.0, 0.0, 0.0],
+        [0.5, 0.0, 0.0],  # compressed; ideal position is (1,0,0)
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ], dtype=float)
+    inv_masses = np.ones(4)
+    target_v = 1.0 / 6.0
+
+    constraint = TetrahedralVolumeConstraint(0, 1, 2, 3, target_v, compliance=0.0)
+    lambda_acc = 0.0
+    for _ in range(100):
+        lambda_acc = constraint.project(x, inv_masses, 0.01, lambda_acc)
+
+    a = x[1] - x[0]; b = x[2] - x[0]; c = x[3] - x[0]
+    V = np.dot(a, np.cross(b, c)) / 6.0
+    assert abs(V - target_v) < 1e-6
+
+
+def test_tet_volume_sign_below_target():
+    # When volume is below target, a single project() call increases it.
+    x = np.array([
+        [0.0, 0.0, 0.0],
+        [0.5, 0.0, 0.0],  # compressed
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ], dtype=float)
+    inv_masses = np.ones(4)
+    target_v = 1.0 / 6.0
+
+    a = x[1] - x[0]; b = x[2] - x[0]; c = x[3] - x[0]
+    v_before = np.dot(a, np.cross(b, c)) / 6.0
+    assert v_before < target_v
+
+    constraint = TetrahedralVolumeConstraint(0, 1, 2, 3, target_v, compliance=0.0)
+    constraint.project(x, inv_masses, 0.01, 0.0)
+
+    a = x[1] - x[0]; b = x[2] - x[0]; c = x[3] - x[0]
+    v_after = np.dot(a, np.cross(b, c)) / 6.0
+    assert v_after > v_before
+
+
+def test_tet_volume_sign_above_target():
+    # When volume exceeds target, a single project() call reduces it.
+    x = np.array([
+        [0.0, 0.0, 0.0],
+        [2.0, 0.0, 0.0],  # expanded
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ], dtype=float)
+    inv_masses = np.ones(4)
+    target_v = 1.0 / 6.0
+
+    a = x[1] - x[0]; b = x[2] - x[0]; c = x[3] - x[0]
+    v_before = np.dot(a, np.cross(b, c)) / 6.0
+    assert v_before > target_v
+
+    constraint = TetrahedralVolumeConstraint(0, 1, 2, 3, target_v, compliance=0.0)
+    constraint.project(x, inv_masses, 0.01, 0.0)
+
+    a = x[1] - x[0]; b = x[2] - x[0]; c = x[3] - x[0]
+    v_after = np.dot(a, np.cross(b, c)) / 6.0
+    assert v_after < v_before

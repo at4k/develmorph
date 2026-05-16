@@ -424,3 +424,73 @@ class TriangleAreaConstraint:
         x[self.i2] += delta_lambda * inv_masses[self.i2] * grad2
 
         return lambda_acc
+
+
+class TetrahedralVolumeConstraint:
+    """
+    XPBD equality constraint: volume of tetrahedron(center, p0, p1, p2) = target.
+
+    Each surface triangle of a cell, together with the cell center, forms a
+    tetrahedron. Preserving each tetrahedron's volume independently produces
+    a local pressure model where cytoplasm pushes outward on each membrane patch.
+
+    Constraint: C = V - target_volume = 0
+
+    Volume formula:
+        a = p0 - pc, b = p1 - pc, c = p2 - pc
+        V = dot(a, cross(b, c)) / 6
+
+    Gradients:
+        dV/dp0 = cross(b, c) / 6
+        dV/dp1 = cross(c, a) / 6
+        dV/dp2 = cross(a, b) / 6
+        dV/dpc = -(dV/dp0 + dV/dp1 + dV/dp2)
+    """
+
+    def __init__(
+        self, center_idx: int, i0: int, i1: int, i2: int,
+        target_volume: float, compliance: float = 0.0
+    ):
+        self.center_idx = center_idx
+        self.i0 = i0
+        self.i1 = i1
+        self.i2 = i2
+        self.target_volume = target_volume
+        self.compliance = compliance
+
+    def project(self, x, inv_masses, dt, lambda_acc):
+        pc = x[self.center_idx]
+        p0, p1, p2 = x[self.i0], x[self.i1], x[self.i2]
+        a, b, c = p0 - pc, p1 - pc, p2 - pc
+
+        V = np.dot(a, np.cross(b, c)) / 6.0
+        C = V - self.target_volume
+
+        if abs(C) < 1e-12:
+            return lambda_acc
+
+        g0 = np.cross(b, c) / 6.0
+        g1 = np.cross(c, a) / 6.0
+        g2 = np.cross(a, b) / 6.0
+        gc = -(g0 + g1 + g2)
+
+        w_grad_sq = (
+            inv_masses[self.center_idx] * np.dot(gc, gc)
+            + inv_masses[self.i0] * np.dot(g0, g0)
+            + inv_masses[self.i1] * np.dot(g1, g1)
+            + inv_masses[self.i2] * np.dot(g2, g2)
+        )
+
+        if w_grad_sq < 1e-12:
+            return lambda_acc
+
+        alpha_tilde = self.compliance / (dt * dt) if dt > 0 else 0.0
+        delta_lambda = (-C - alpha_tilde * lambda_acc) / (w_grad_sq + alpha_tilde)
+        lambda_acc += delta_lambda
+
+        x[self.center_idx] += delta_lambda * inv_masses[self.center_idx] * gc
+        x[self.i0] += delta_lambda * inv_masses[self.i0] * g0
+        x[self.i1] += delta_lambda * inv_masses[self.i1] * g1
+        x[self.i2] += delta_lambda * inv_masses[self.i2] * g2
+
+        return lambda_acc
