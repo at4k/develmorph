@@ -527,3 +527,13 @@ def test_face_volumes_ico():
     )
     assert len(cb.face_volumes) == len(cb.triangles)
     assert abs(sum(cb.face_volumes) - cb.target_volume) < 1e-10
+    assert all(v > 0.0 for v in cb.face_volumes)
+
+
+def test_face_volumes_sum_equals_target_volume_off_origin():
+    cb, _ = create_cell_body(
+        center=np.array([3.0, 5.0, -2.0]),
+        radius=1.5,
+        positions=np.empty((0, 3)),
+    )
+    assert abs(sum(cb.face_volumes) - cb.target_volume) < 1e-10

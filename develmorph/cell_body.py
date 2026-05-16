@@ -268,34 +268,22 @@ def create_cell_body(
     else:
         new_positions = np.vstack([positions, new_points])
 
-    # Compute target volume from actual mesh geometry
+    # Merged triangle loop: compute target_volume, face_areas, face_volumes together
     target_volume = 0.0
-    for a, b, c in triangles:
-        p0 = new_positions[surface_indices[a]]
-        p1 = new_positions[surface_indices[b]]
-        p2 = new_positions[surface_indices[c]]
-        target_volume += np.dot(p0, np.cross(p1, p2))
-    target_volume /= 6.0
-
-    # Compute initial face areas (used by TriangleAreaConstraint)
     face_areas = []
+    face_volumes = []
     for a, b, c in triangles:
         p0 = new_positions[surface_indices[a]]
         p1 = new_positions[surface_indices[b]]
         p2 = new_positions[surface_indices[c]]
         cross_vec = np.cross(p1 - p0, p2 - p0)
         face_areas.append(0.5 * np.linalg.norm(cross_vec))
-
-    # Compute per-tetrahedron target volumes (used by TetrahedralVolumeConstraint)
-    face_volumes = []
-    for a, b, c in triangles:
-        p0 = new_positions[surface_indices[a]]
-        p1 = new_positions[surface_indices[b]]
-        p2 = new_positions[surface_indices[c]]
-        a_vec = p0 - center
-        b_vec = p1 - center
-        c_vec = p2 - center
-        face_volumes.append(np.dot(a_vec, np.cross(b_vec, c_vec)) / 6.0)
+        v0 = p0 - center
+        v1 = p1 - center
+        v2 = p2 - center
+        tet_vol = np.dot(v0, np.cross(v1, v2)) / 6.0
+        face_volumes.append(tet_vol)
+        target_volume += tet_vol
 
     # Compute rest lengths from initial geometry
     center_surface_rest = [
