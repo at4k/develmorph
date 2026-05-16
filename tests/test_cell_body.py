@@ -488,3 +488,42 @@ def test_create_cell_body_oct_face_areas():
     expected = math.sqrt(3) / 2
     for area in cb.face_areas:
         assert abs(area - expected) < 1e-10
+
+
+def test_face_volumes_in_create_cell_body():
+    cb, _ = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=np.empty((0, 3)),
+    )
+    assert hasattr(cb, 'face_volumes')
+    assert len(cb.face_volumes) == len(cb.triangles)
+
+
+def test_face_volumes_sum_equals_target_volume():
+    cb, _ = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=np.empty((0, 3)),
+    )
+    assert abs(sum(cb.face_volumes) - cb.target_volume) < 1e-10
+
+
+def test_face_volumes_all_positive():
+    cb, _ = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=2.0,
+        positions=np.empty((0, 3)),
+    )
+    assert all(v > 0.0 for v in cb.face_volumes)
+
+
+def test_face_volumes_ico():
+    cb, _ = create_cell_body(
+        center=np.array([0.0, 0.0, 0.0]),
+        radius=1.0,
+        positions=np.empty((0, 3)),
+        topology='ico',
+    )
+    assert len(cb.face_volumes) == len(cb.triangles)
+    assert abs(sum(cb.face_volumes) - cb.target_volume) < 1e-10

@@ -177,6 +177,7 @@ class CellBody:
         orientation=None,
         topology='oct',
         face_areas=None,
+        face_volumes=None,
     ):
         self.topology = topology
         self.name = name
@@ -196,6 +197,7 @@ class CellBody:
         ]
         self.surface_surface_rest = list(surface_surface_rest)
         self.face_areas = list(face_areas) if face_areas is not None else []
+        self.face_volumes = list(face_volumes) if face_volumes is not None else []
 
     def all_indices(self):
         """Return all particle indices belonging to this cell."""
@@ -284,6 +286,17 @@ def create_cell_body(
         cross_vec = np.cross(p1 - p0, p2 - p0)
         face_areas.append(0.5 * np.linalg.norm(cross_vec))
 
+    # Compute per-tetrahedron target volumes (used by TetrahedralVolumeConstraint)
+    face_volumes = []
+    for a, b, c in triangles:
+        p0 = new_positions[surface_indices[a]]
+        p1 = new_positions[surface_indices[b]]
+        p2 = new_positions[surface_indices[c]]
+        a_vec = p0 - center
+        b_vec = p1 - center
+        c_vec = p2 - center
+        face_volumes.append(np.dot(a_vec, np.cross(b_vec, c_vec)) / 6.0)
+
     # Compute rest lengths from initial geometry
     center_surface_rest = [
         np.linalg.norm(new_positions[si] - new_positions[center_idx])
@@ -309,6 +322,7 @@ def create_cell_body(
         orientation=orientation if orientation is not None else np.eye(3),
         topology=topology,
         face_areas=face_areas,
+        face_volumes=face_volumes,
     )
 
     return cell_body, new_positions
