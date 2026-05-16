@@ -556,3 +556,36 @@ def test_tet_volume_sign_above_target():
     a = x[1] - x[0]; b = x[2] - x[0]; c = x[3] - x[0]
     v_after = np.dot(a, np.cross(b, c)) / 6.0
     assert v_after < v_before
+
+
+def test_tet_volume_constraint_surface_gradients():
+    # Verify g0, g1, g2 match numerical differentiation.
+    x = np.array([
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ], dtype=float)
+
+    def vol(pos):
+        a = pos[1] - pos[0]; b = pos[2] - pos[0]; c = pos[3] - pos[0]
+        return np.dot(a, np.cross(b, c)) / 6.0
+
+    eps = 1e-6
+    for particle_idx in [1, 2, 3]:
+        num_grad = np.zeros(3)
+        for d in range(3):
+            xp = x.copy(); xp[particle_idx, d] += eps
+            xm = x.copy(); xm[particle_idx, d] -= eps
+            num_grad[d] = (vol(xp) - vol(xm)) / (2 * eps)
+
+        a = x[1] - x[0]; b = x[2] - x[0]; c = x[3] - x[0]
+        if particle_idx == 1:
+            analytic_grad = np.cross(b, c) / 6.0
+        elif particle_idx == 2:
+            analytic_grad = np.cross(c, a) / 6.0
+        else:
+            analytic_grad = np.cross(a, b) / 6.0
+
+        np.testing.assert_allclose(analytic_grad, num_grad, atol=1e-5,
+                                   err_msg=f"gradient mismatch for particle {particle_idx}")

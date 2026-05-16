@@ -464,6 +464,12 @@ class TetrahedralVolumeConstraint:
         a, b, c = p0 - pc, p1 - pc, p2 - pc
 
         V = np.dot(a, np.cross(b, c)) / 6.0
+
+        # Guard: skip if tetrahedron is inverted. Distance constraints
+        # will restore shape before volume can be enforced.
+        if V <= 0.0 and self.target_volume > 0.0:
+            return lambda_acc
+
         C = V - self.target_volume
 
         if abs(C) < 1e-12:
