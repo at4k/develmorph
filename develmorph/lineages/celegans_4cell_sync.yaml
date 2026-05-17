@@ -1,0 +1,34 @@
+# C. elegans 4-cell stage: AB and P1 divide simultaneously
+#
+# Experiment 2: Synchronous AB + P1 division at the same step.
+# AB divides along the D-V axis (minor_axis/Y): ABp to dorsal (+Y), ABa to ventral (-Y).
+# P1 divides along the D-V axis (minor_axis/Y): P2 to dorsal (+Y), EMS to ventral (-Y).
+# Because ABp (dorsal) and P2 (dorsal-posterior) end up on the same side,
+# ABp-P2 adhesion forms immediately after division, stabilizing the diamond
+# configuration through contact mechanics alone (no signaling required).
+# ABa-EMS adhesion forms symmetrically (both ventral).
+# This reproduces the biological 4-cell diamond contact topology:
+#   ABp-P2, ABa-EMS, EMS-P2 (missing: ABp-EMS, ABa-P2).
+
+lineage_id: celegans_4cell_sync
+
+steps:
+  # 1-cell -> 2-cell
+  - step: 1
+    divisions:
+      - parent: P0
+        axis: major_axis
+        daughters: [AB, P1]
+        volume_ratio: 0.6
+
+  # 2-cell -> 4-cell (AB and P1 divide simultaneously)
+  - step: 2
+    divisions:
+      - parent: AB
+        axis: minor_axis
+        daughters: [ABp, ABa]
+        volume_ratio: 0.5
+      - parent: P1
+        axis: minor_axis
+        daughters: [P2, EMS]
+        volume_ratio: 0.4
