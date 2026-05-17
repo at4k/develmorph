@@ -66,12 +66,14 @@ def run_simulation(diamond=False, n_settle_steps=300, record_every=5):
         dt=0.01,
         n_iter=n_iter_division,
         damping=1.0,
-        shell_compliance=0.001,
+        shell_compliance=0.0,
         membrane_compliance=0.02,
         volume_compliance=0.1,
         contact_overlap=0.10,
         surface_contact_compliance=0.1,
         area_compliance=0.0,
+        wnt_ems_dorsal_y=0.3 if diamond else None,
+        wnt_compliance=0.001,
     )
 
     frames = []  # list of (positions_copy, [(name, center_idx, surface_indices, target_volume)])
