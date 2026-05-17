@@ -82,8 +82,6 @@ def step(
     surface_contact_compliance=None,
     area_compliance=None,
     tet_volume_compliance=None,
-    wnt_ems_dorsal_y=None,
-    wnt_compliance=0.001,
 ):
     """
     Advance physical state by one time step using XPBD.
@@ -112,11 +110,6 @@ def step(
             When set, replaces VolumeConstraint + DistanceConstraint +
             TriangleAreaConstraint with one TetrahedralVolumeConstraint per
             surface triangle. None (default) preserves the old path.
-        wnt_ems_dorsal_y: if set, applies a dorsal Y-bias to the cell named "EMS"
-            when P2 is in contact with it (approximating Wnt-driven EMS migration).
-            EMS center is pushed to y >= wnt_ems_dorsal_y. None disables.
-        wnt_compliance: compliance for the Wnt EMS dorsal bias constraint.
-
     Returns:
         (new_positions, new_velocities)
     """
@@ -318,34 +311,10 @@ def step(
                                 AdhesionConstraint(si, sj, 0.0, surface_contact_compliance)
                             )
 
-    # Wnt-like EMS dorsal bias: P2 contacts EMS → EMS migrates toward +Y (dorsal).
-    # Approximates Wnt signaling that drives diamond formation in C. elegans.
-    # HalfSpaceConstraint with n=[0,-1,0] keeps EMS center at y >= wnt_ems_dorsal_y.
-    wnt_constraints = []
-    if wnt_ems_dorsal_y is not None:
-        ems_cb = next((cb for cb in cell_bodies if cb.name == "EMS"), None)
-        p2_cb = next((cb for cb in cell_bodies if cb.name == "P2"), None)
-        if ems_cb is not None:
-            apply_wnt = True
-            if p2_cb is not None:
-                d_p2_ems = np.linalg.norm(
-                    positions[ems_cb.center_idx] - positions[p2_cb.center_idx]
-                )
-                ri = ems_cb.nominal_radius()
-                rj = p2_cb.nominal_radius()
-                apply_wnt = d_p2_ems < ri + rj + 0.5
-            if apply_wnt:
-                M = np.array([0.0, wnt_ems_dorsal_y, 0.0])
-                n = np.array([0.0, -1.0, 0.0])
-                wnt_constraints.append(
-                    HalfSpaceConstraint(ems_cb.center_idx, M, n, wnt_compliance)
-                )
-
     # Ordered: tet -> volume -> distance -> area -> adhesion -> collision
-    #          -> surface_penetration -> surface_contact -> shell -> wnt
+    #          -> surface_penetration -> surface_contact -> shell
     # tet and (volume+distance+area) are mutually exclusive (one set will be empty).
     # surface_contact after HalfSpace: repulsion is settled before attraction fires.
-    # wnt last: Wnt bias applies after all mechanical constraints are resolved.
     all_constraints = (
         tet_constraints
         + volume_constraints
@@ -356,7 +325,6 @@ def step(
         + surface_penetration_constraints
         + surface_contact_constraints
         + shell_constraints
-        + wnt_constraints
     )
 
     # 3. XPBD iteration
