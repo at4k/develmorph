@@ -1,14 +1,17 @@
-# C. elegans 4-cell stage: AB and P1 divide simultaneously
+# C. elegans 4-cell stage: sequential AB then P1 division with settling gaps
 #
-# Experiment 2: Synchronous AB + P1 division at the same step.
-# AB divides along the D-V axis (minor_axis/Y): ABp to dorsal (+Y), ABa to ventral (-Y).
-# P1 divides along the D-V axis (minor_axis/Y): P2 to dorsal (+Y), EMS to ventral (-Y).
-# Because ABp (dorsal) and P2 (dorsal-posterior) end up on the same side,
-# ABp-P2 adhesion forms immediately after division, stabilizing the diamond
-# configuration through contact mechanics alone (no signaling required).
-# ABa-EMS adhesion forms symmetrically (both ventral).
-# This reproduces the biological 4-cell diamond contact topology:
-#   ABp-P2, ABa-EMS, EMS-P2 (missing: ABp-EMS, ABa-P2).
+# Biological timing:
+#   1. P0 divides into AB (anterior) and P1 (posterior) along AP axis.
+#   2. AB and P1 settle for ~50 steps (2-cell physical equilibration).
+#   3. AB divides into ABa (anterior) and ABp (posterior) along AP axis.
+#      ABp is positioned adjacent to P1, touching it.
+#   4. The 3-cell stage (ABa, ABp, P1) settles for ~20 steps.
+#      During this time ABp presses against P1, shifting P1 slightly posteriorly.
+#   5. P1 divides into EMS (anterior) and P2 (posterior) along AP axis.
+#      Because P1 has been pressed by ABp, EMS starts closer to ABp than
+#      in the synchronous case, reducing the barrier to diamond formation.
+#
+# Expected outcome: ABa-P2 aligned with AP (X) axis, ABp-EMS aligned with DV (Y) axis.
 
 lineage_id: celegans_4cell_sync
 
@@ -21,18 +24,20 @@ steps:
         daughters: [AB, P1]
         volume_ratio: 0.6
 
-  # 2-cell -> 4-cell (AB and P1 divide simultaneously)
-  # AB divides along AP axis: ABa anterior, ABp between AB and P1.
-  # P1 divides along AP axis: EMS anterior (adjacent to ABp), P2 posterior.
-  # ABp is sandwiched between ABa and EMS on the X axis.
-  # Contact repulsion + shell geometry bow ABp dorsally and EMS ventrally
-  # → diamond configuration (ABa-P2 on X, ABp-EMS on Y).
-  - step: 2
+  # 2-cell -> 3-cell (AB divides; 50 steps after P0 division)
+  # ABp is placed between ABa and P1, in contact with P1.
+  - step: 51
     divisions:
       - parent: AB
         axis: major_axis
         daughters: [ABa, ABp]
         volume_ratio: 0.5
+
+  # 3-cell -> 4-cell (P1 divides; 20 steps after AB division)
+  # EMS (anterior daughter of P1) is placed adjacent to ABp.
+  # P2 (posterior daughter) goes to the posterior pole.
+  - step: 71
+    divisions:
       - parent: P1
         axis: major_axis
         daughters: [EMS, P2]

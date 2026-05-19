@@ -36,8 +36,8 @@ CELL_COLORS = {
 def run_simulation(diamond=False, n_settle_steps=300, record_every=5):
     if diamond:
         yaml_path = YAML_SYNC
-        n_division_steps = 3   # step1: P0->AB+P1, step2: simultaneous 4-cell, step3: no-op
-        n_iter_division = 5
+        n_division_steps = 72  # step1: P0 div, step51: AB div, step71: P1 div, +1 settle
+        n_iter_division = 100  # full iterations so cells settle between divisions
     else:
         yaml_path = YAML_SEQUENTIAL
         n_division_steps = 4   # step1..3: sequential divisions, step4: no-op
