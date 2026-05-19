@@ -35,7 +35,7 @@ def _shift_cell_indices(cell_bodies, deleted_indices, exclude=None):
 
 
 class World:
-    def __init__(self, cell_bodies, positions, dt=0.01, shell_params=(5.0, 5.0, 5.0), lineage: Optional[CellLineage] = None, n_iter: int = 10, damping: float = 0.0, shell_compliance: float = 0.0, collision_compliance: float = 0.0, membrane_compliance: float = 0.001, volume_compliance: float = 1.0, contact_overlap: float = 0.0, surface_contact_compliance=None, area_compliance=None, tet_volume_compliance=None, ):
+    def __init__(self, cell_bodies, positions, dt=0.01, shell_params=(5.0, 5.0, 5.0), lineage: Optional[CellLineage] = None, n_iter: int = 10, damping: float = 0.0, shell_compliance: float = 0.0, collision_compliance: float = 0.0, membrane_compliance: float = 0.001, volume_compliance: float = 1.0, contact_overlap: float = 0.0, surface_contact_compliance=None, area_compliance=None, tet_volume_compliance=None, attach_margin: float = 0.3, detach_margin: float = 0.8, ):
 
         self.cell_bodies = list(cell_bodies)
         self.positions = positions.copy()
@@ -59,6 +59,8 @@ class World:
         self.surface_contact_compliance = surface_contact_compliance
         self.area_compliance = area_compliance
         self.tet_volume_compliance = tet_volume_compliance
+        self.attach_margin = attach_margin
+        self.detach_margin = detach_margin
 
         self.division_steps = []
 
@@ -165,6 +167,8 @@ class World:
             surface_contact_compliance=self.surface_contact_compliance,
             area_compliance=self.area_compliance,
             tet_volume_compliance=self.tet_volume_compliance,
+            attach_margin=self.attach_margin,
+            detach_margin=self.detach_margin,
         )
 
         centers = np.array([self.positions[cb.center_idx] for cb in self.cell_bodies])

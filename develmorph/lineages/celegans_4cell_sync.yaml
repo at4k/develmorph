@@ -22,13 +22,18 @@ steps:
         volume_ratio: 0.6
 
   # 2-cell -> 4-cell (AB and P1 divide simultaneously)
+  # AB divides along AP axis: ABa anterior, ABp between AB and P1.
+  # P1 divides along AP axis: EMS anterior (adjacent to ABp), P2 posterior.
+  # ABp is sandwiched between ABa and EMS on the X axis.
+  # Contact repulsion + shell geometry bow ABp dorsally and EMS ventrally
+  # → diamond configuration (ABa-P2 on X, ABp-EMS on Y).
   - step: 2
     divisions:
       - parent: AB
-        axis: minor_axis
-        daughters: [ABp, ABa]
+        axis: major_axis
+        daughters: [ABa, ABp]
         volume_ratio: 0.5
       - parent: P1
-        axis: minor_axis
-        daughters: [P2, EMS]
-        volume_ratio: 0.4
+        axis: major_axis
+        daughters: [EMS, P2]
+        volume_ratio: 0.6

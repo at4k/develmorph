@@ -48,7 +48,7 @@ def run_simulation(diamond=False, n_settle_steps=300, record_every=5):
     positions = np.zeros((0, 3))
     p0, positions = create_cell_body(
         center=np.array([0.0, 0.0, 0.0]),
-        radius=1.136,
+        radius=1.4,
         positions=positions,
         name="P0",
         topology='ico',
