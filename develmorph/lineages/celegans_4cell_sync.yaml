@@ -16,8 +16,8 @@
 lineage_id: celegans_4cell_sync
 
 steps:
-  # 1-cell -> 2-cell
-  - step: 1
+  # 1-cell -> 2-cell (step 11: 10 steps for P0 to settle inside shell before dividing)
+  - step: 11
     divisions:
       - parent: P0
         axis: major_axis
@@ -26,7 +26,7 @@ steps:
 
   # 2-cell -> 3-cell (AB divides; 50 steps after P0 division)
   # ABp is placed between ABa and P1, in contact with P1.
-  - step: 51
+  - step: 61
     divisions:
       - parent: AB
         axis: major_axis
@@ -36,7 +36,7 @@ steps:
   # 3-cell -> 4-cell (P1 divides; 20 steps after AB division)
   # EMS (anterior daughter of P1) is placed adjacent to ABp.
   # P2 (posterior daughter) goes to the posterior pole.
-  - step: 71
+  - step: 81
     divisions:
       - parent: P1
         axis: major_axis
