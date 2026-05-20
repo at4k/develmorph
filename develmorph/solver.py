@@ -82,6 +82,7 @@ def step(
     surface_contact_compliance=None,
     area_compliance=None,
     tet_volume_compliance=None,
+    center_shell_margin_factor: float = 0.0,
 ):
     """
     Advance physical state by one time step using XPBD.
@@ -110,6 +111,10 @@ def step(
             When set, replaces VolumeConstraint + DistanceConstraint +
             TriangleAreaConstraint with one TetrahedralVolumeConstraint per
             surface triangle. None (default) preserves the old path.
+        center_shell_margin_factor: fraction of nominal_radius used as shell margin for
+            center particles. 0.0 (default) = no margin (center can touch shell boundary).
+            Values > 0 prevent centers from reaching the boundary, stopping surface
+            particles on the shell side from being geometrically impossible to place.
     Returns:
         (new_positions, new_velocities)
     """
@@ -179,18 +184,21 @@ def step(
                     )
 
     # Shell constraints: center + surface points.
-    # Center uses margin=0 (full shell boundary) so it is not pushed inward
-    # when the cell rests near the wall.  Surface particles each have their
-    # own shell constraint (margin=0) and keep the surface inside independently.
-    # Using nominal_r for the center caused ABp-style center drift in tightly
-    # packed configurations because the shrunk effective shell (a-r, b-r, c-r)
-    # lay inside the natural cell position, generating a persistent inward push.
+    # Surface particles always use margin=0 (can touch shell boundary).
+    # Center uses margin = nominal_r * center_shell_margin_factor.
+    # factor=0 (default): center can reach shell boundary — matches legacy behavior.
+    # factor>0: keeps center at least factor*r from boundary in the ellipsoidal
+    # sense, preventing surface particles on the shell side from being crushed
+    # (they would need to be at rest_length from center but beyond the shell).
+    # NOTE: large factors (>0.5) constrain cells in non-AP directions too, which
+    # can limit dorsal/ventral displacement in packed diamond configurations.
     collision_constraints = []
     shell_constraints = []
     for cb in cell_bodies:
         nominal_r = cb.nominal_radius()
+        center_margin = nominal_r * center_shell_margin_factor
         shell_constraints.append(
-            ShellConstraint(cb.center_idx, *shell_params, 0.0, shell_compliance)
+            ShellConstraint(cb.center_idx, *shell_params, center_margin, shell_compliance)
         )
         for si in cb.surface_indices:
             shell_constraints.append(ShellConstraint(si, *shell_params, 0.0, shell_compliance))

@@ -58,6 +58,12 @@ def run_simulation(diamond=False, n_settle_steps=300, record_every=5):
     # Rx=29.77, Ry=20.27, Rz=16.83 um → biological ratio 1.77:1.21:1.00
     # (1.84, 1.26, 1.04): 1.04x biological ratio; cells nearly touching (gap~0.01)
     # while maintaining diamond configuration. Smaller shells break the arrangement.
+    # center_shell_margin_factor=0.4: prevents ABa/P2 centers from being pushed to
+    # the ellipsoid tips (x=±1.83) where surface particles cannot geometrically fit.
+    # At factor=0.4 the effective center boundary is at ~1.52 in X, giving the cell
+    # ~±0.71 of cross-sectional space to redistribute its volume. Factor 0 reproduces
+    # the legacy extreme-crush behaviour; factor>0.6 restricts Y/Z positions too much
+    # for ABp/EMS to reach their dorsal/ventral diamond positions.
     world = World(
         cell_bodies=[p0],
         positions=positions,
@@ -72,6 +78,7 @@ def run_simulation(diamond=False, n_settle_steps=300, record_every=5):
         contact_overlap=0.10,
         surface_contact_compliance=0.1,
         area_compliance=0.0,
+        center_shell_margin_factor=0.4,
     )
 
     frames = []  # list of (positions_copy, [(name, center_idx, surface_indices, target_volume)])
