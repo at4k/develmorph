@@ -25,12 +25,15 @@ steps:
         volume_ratio: 0.6
 
   # 2-cell -> 3-cell (AB divides; 50 steps after P0 division)
-  # ABp is placed between ABa and P1, in contact with P1.
+  # AB divides along the D-V (minor/Y) axis.
+  # daughters[0] (ABp) placed at +Y (dorsal); daughters[1] (ABa) placed at -Y (ventral).
+  # ABa starts ventral adjacent to the P1 side; P1 contact pushes ABa anteriorly (+X),
+  # while ABp remains dorsal, producing the diamond without Wnt signalling.
   - step: 61
     divisions:
       - parent: AB
-        axis: major_axis
-        daughters: [ABa, ABp]
+        axis: minor_axis
+        daughters: [ABp, ABa]
         volume_ratio: 0.5
 
   # 3-cell -> 4-cell (P1 divides; 20 steps after AB division)

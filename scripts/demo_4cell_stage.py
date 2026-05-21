@@ -38,17 +38,21 @@ def run_simulation(diamond=False, n_settle_steps=300, record_every=5):
         yaml_path = YAML_SYNC
         n_division_steps = 82  # step11: P0 div, step61: AB div, step81: P1 div, +1 settle
         n_iter_division = 100  # full iterations so cells settle between divisions
+        # r=1.3: with correct D-V AB division, cells need to be larger to produce
+        # enough crowding for diamond formation (r=1.2 settles to T-shape).
+        p0_radius = 1.3
     else:
         yaml_path = YAML_SEQUENTIAL
         n_division_steps = 4   # step1..3: sequential divisions, step4: no-op
         n_iter_division = 100
+        p0_radius = 1.2
 
     lineage = CellLineage(yaml_path)
 
     positions = np.zeros((0, 3))
     p0, positions = create_cell_body(
         center=np.array([0.0, 0.0, 0.0]),
-        radius=1.2,
+        radius=p0_radius,
         positions=positions,
         name="P0",
         topology='ico',
