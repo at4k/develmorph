@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 from develmorph.project import (
@@ -478,7 +480,6 @@ def step_pc(
             rest = ci.radius + cj.radius
 
             if use_area_adhesion:
-                import math
                 dist = np.linalg.norm(x[ci.center_idx] - x[cj.center_idx])
                 overlap = max(0.0, rest - dist)
                 r_harm = 2.0 * ci.radius * cj.radius / (ci.radius + cj.radius)
