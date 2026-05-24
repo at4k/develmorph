@@ -111,3 +111,94 @@ def test_step_pc_asymmetric_shell_confinement():
     assert abs(z) <= 0.5 + 1e-6
     assert abs(x) < 0.1
     assert abs(y) < 0.1
+
+
+from develmorph.celllineage import CellLineage
+from develmorph.engine import WorldPC
+
+YAML_PATH = "develmorph/lineages/celegans_early.yaml"
+
+
+def make_p0_worldpc():
+    lineage = CellLineage(YAML_PATH)
+    positions = np.zeros((0, 3))
+    p0, positions = create_physics_cell(
+        np.array([0.0, 0.0, 0.0]), radius=1.0, positions=positions, name="P0"
+    )
+    return WorldPC(
+        physics_cells=[p0],
+        positions=positions,
+        lineage=lineage,
+        shell_params=(5.0, 5.0, 5.0),
+        damping=1.0,
+    )
+
+
+def test_worldpc_step_increments_count():
+    world = make_p0_worldpc()
+    world.step()
+    assert world.step_count == 1
+
+
+def test_worldpc_positions_finite_after_step():
+    world = make_p0_worldpc()
+    world.step()
+    assert np.all(np.isfinite(world.positions))
+
+
+def test_worldpc_step0_no_division():
+    """Step at count=0 does not trigger division (YAML first step is 1)."""
+    world = make_p0_worldpc()
+    world.step()  # step_count=0 during execution
+    assert len(world.physics_cells) == 1
+    assert world.physics_cells[0].name == "P0"
+
+
+def test_worldpc_step1_p0_divides_into_ab_p1():
+    world = make_p0_worldpc()
+    world.step()  # step_count=0
+    world.step()  # step_count=1: P0 -> AB + P1
+    names = {pc.name for pc in world.physics_cells}
+    assert names == {"AB", "P1"}
+
+
+def test_worldpc_four_cell_stage():
+    world = make_p0_worldpc()
+    for _ in range(4):
+        world.step()  # step_counts 0,1,2,3
+    names = {pc.name for pc in world.physics_cells}
+    assert names == {"ABa", "ABp", "EMS", "P2"}
+
+
+def test_worldpc_positions_length_equals_cell_count():
+    """positions array has exactly one row per PhysicsCell."""
+    world = make_p0_worldpc()
+    for _ in range(4):
+        world.step()
+    assert len(world.positions) == len(world.physics_cells)
+
+
+def test_worldpc_division_volume_ratio():
+    """P0 -> AB (60%) + P1 (40%)."""
+    world = make_p0_worldpc()
+    world.step()  # step_count=0
+    world.step()  # step_count=1
+    ab = next(pc for pc in world.physics_cells if pc.name == "AB")
+    p1 = next(pc for pc in world.physics_cells if pc.name == "P1")
+    r1, r2 = ab.radius, p1.radius
+    total = r1 ** 3 + r2 ** 3
+    assert abs(r1 ** 3 / total - 0.6) < 1e-6
+
+
+def test_worldpc_no_lineage_no_division():
+    """WorldPC without lineage runs without dividing."""
+    positions = np.zeros((0, 3))
+    cell, positions = create_physics_cell(np.array([0.0, 0.0, 0.0]), 1.0, positions)
+    world = WorldPC(
+        physics_cells=[cell],
+        positions=positions,
+        shell_params=(5.0, 5.0, 5.0),
+        damping=1.0,
+    )
+    world.step()
+    assert len(world.physics_cells) == 1
