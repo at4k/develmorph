@@ -1,5 +1,7 @@
 import numpy as np
 import pytest
+from develmorph.celllineage import CellLineage
+from develmorph.engine import WorldPC
 from develmorph.physics_cell import create_physics_cell
 from develmorph.solver import step_pc
 
@@ -112,9 +114,6 @@ def test_step_pc_asymmetric_shell_confinement():
     assert abs(x) < 0.1
     assert abs(y) < 0.1
 
-
-from develmorph.celllineage import CellLineage
-from develmorph.engine import WorldPC
 
 YAML_PATH = "develmorph/lineages/celegans_early.yaml"
 
