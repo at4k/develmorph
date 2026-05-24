@@ -322,3 +322,87 @@ def visualize_timelapse_napari(
     viewer.camera.angles = (30, 30, 120)
 
     napari.run()
+
+
+import numpy as np
+from develmorph.cell_body import OCTAHEDRON_DIRS
+
+
+class SurfaceShell:
+    """
+    Kinematic surface mesh for a PhysicsCell.
+
+    Reconstructed each step from center + radius + contact records.
+    Does NOT participate in XPBD. No drift possible.
+
+    Points are octahedron vertices (6 pts at n_subdivisions=0) optionally
+    flattened at contact planes proportional to overlap.
+    """
+
+    def __init__(self, center, radius, contacts):
+        """
+        Args:
+            center: (3,) array, cell center position
+            radius: float, cell radius
+            contacts: list of ContactRecord involving this cell
+        """
+        self.center = np.asarray(center, dtype=float)
+        self.radius = float(radius)
+        self.contacts = contacts
+
+    def mesh_points(self, n_subdivisions: int = 0) -> np.ndarray:
+        """
+        Return (M, 3) surface mesh points.
+
+        Args:
+            n_subdivisions: additional subdivision rounds (0 = 6 octahedron pts)
+
+        Returns:
+            (M, 3) array of world-space surface points
+        """
+        dirs = OCTAHEDRON_DIRS.copy().astype(float)
+
+        # Flatten at each contact plane
+        for record in self.contacts:
+            # normal points from j toward i; contact is on the +normal side of i
+            # and on the -normal side of j. We flatten in the +normal direction.
+            n = record.normal  # unit vector from j to i
+            flatten_amount = min(record.overlap * 0.5, self.radius * 0.3)
+            for k in range(len(dirs)):
+                proj = np.dot(dirs[k], n)
+                if proj > 0.0:
+                    dirs[k] = dirs[k] - flatten_amount * proj * n / self.radius
+            # Re-normalize to keep points on sphere surface
+            for k in range(len(dirs)):
+                norm_k = np.linalg.norm(dirs[k])
+                if norm_k > 1e-12:
+                    dirs[k] = dirs[k] / norm_k
+
+        return self.center + self.radius * dirs
+
+
+def reconstruct_surface_shells(
+    physics_cells: list,
+    positions: np.ndarray,
+    contacts: list,
+) -> list:
+    """
+    Build a SurfaceShell for each PhysicsCell from current physics state.
+
+    Args:
+        physics_cells: list of PhysicsCell
+        positions: (N, 3) current center positions
+        contacts: list of ContactRecord from compute_contacts()
+
+    Returns:
+        list of SurfaceShell, one per cell (same order as physics_cells)
+    """
+    shells = []
+    for idx, pc in enumerate(physics_cells):
+        cell_contacts = [r for r in contacts if r.i == idx or r.j == idx]
+        shells.append(SurfaceShell(
+            center=positions[pc.center_idx],
+            radius=pc.radius,
+            contacts=cell_contacts,
+        ))
+    return shells
