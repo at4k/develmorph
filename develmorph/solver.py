@@ -410,6 +410,7 @@ def step_pc(
     damping=0.0,
     shell_compliance=0.0,
     collision_compliance=0.0,
+    use_area_adhesion=False,
 ):
     """
     Advance PhysicsCell state by one XPBD time step.
@@ -474,11 +475,23 @@ def step_pc(
         )
         for i, j in active_adhesions:
             ci, cj = physics_cells[i], physics_cells[j]
+            rest = ci.radius + cj.radius
+
+            if use_area_adhesion:
+                import math
+                dist = np.linalg.norm(x[ci.center_idx] - x[cj.center_idx])
+                overlap = max(0.0, rest - dist)
+                r_harm = 2.0 * ci.radius * cj.radius / (ci.radius + cj.radius)
+                area = math.pi * overlap * r_harm
+                effective_compliance = adhesion_compliance / (area + 1e-6)
+            else:
+                effective_compliance = adhesion_compliance
+
             adhesion_constraints.append(
                 AdhesionConstraint(
                     ci.center_idx, cj.center_idx,
-                    ci.radius + cj.radius,
-                    adhesion_compliance,
+                    rest,
+                    effective_compliance,
                 )
             )
 

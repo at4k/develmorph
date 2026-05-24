@@ -201,3 +201,33 @@ def test_worldpc_no_lineage_no_division():
     )
     world.step()
     assert len(world.physics_cells) == 1
+
+
+def test_step_pc_area_adhesion_attracts_cells():
+    """
+    With use_area_adhesion=True and an active adhesion pair beyond rest_length,
+    cells should move toward each other (toward rest_length = r_i + r_j).
+    """
+    positions = np.zeros((0, 3))
+    c1, positions = create_physics_cell(np.array([0.0, 0.0, 0.0]), 1.0, positions)
+    c2, positions = create_physics_cell(np.array([2.1, 0.0, 0.0]), 1.0, positions)
+    # rest_length = 2.0, current dist = 2.1 → adhesion should pull them together
+
+    active_adhesions = {(0, 1)}
+    velocities = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
+
+    new_pos, _ = step_pc(
+        positions, velocities, inv_masses,
+        dt=0.01,
+        physics_cells=[c1, c2],
+        shell_params=(10.0, 10.0, 10.0),
+        n_iter=10,
+        active_adhesions=active_adhesions,
+        adhesion_compliance=0.1,
+        damping=1.0,
+        use_area_adhesion=True,
+    )
+
+    dist_after = np.linalg.norm(new_pos[c1.center_idx] - new_pos[c2.center_idx])
+    assert dist_after < 2.1  # moved toward rest_length
