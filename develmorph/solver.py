@@ -362,3 +362,133 @@ def step(
     new_vel = (x - x_prev) / dt * (1.0 - damping) if dt > 0 else np.zeros_like(x)
 
     return x, new_vel
+
+
+def _update_adhesion_pairs_pc(positions, physics_cells, active_adhesions,
+                               attach_margin, detach_margin):
+    """
+    Update active adhesion pairs for PhysicsCell list using hysteresis.
+
+    Uses cell list indices (not particle indices) for pair identification.
+    Attaches pairs within attach_margin of contact; detaches beyond detach_margin.
+    """
+    n = len(physics_cells)
+
+    to_remove = set()
+    for i, j in active_adhesions:
+        if i >= n or j >= n:
+            to_remove.add((i, j))
+            continue
+        ci, cj = physics_cells[i], physics_cells[j]
+        dist = np.linalg.norm(positions[ci.center_idx] - positions[cj.center_idx])
+        if dist > ci.radius + cj.radius + detach_margin:
+            to_remove.add((i, j))
+    active_adhesions -= to_remove
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if (i, j) in active_adhesions:
+                continue
+            ci, cj = physics_cells[i], physics_cells[j]
+            dist = np.linalg.norm(positions[ci.center_idx] - positions[cj.center_idx])
+            if dist < ci.radius + cj.radius + attach_margin:
+                active_adhesions.add((i, j))
+
+
+def step_pc(
+    positions,
+    velocities,
+    inv_masses,
+    dt,
+    physics_cells,
+    shell_params,
+    n_iter=10,
+    active_adhesions=None,
+    adhesion_compliance=0.1,
+    attach_margin=0.3,
+    detach_margin=0.8,
+    damping=0.0,
+    shell_compliance=0.0,
+    collision_compliance=0.0,
+):
+    """
+    Advance PhysicsCell state by one XPBD time step.
+
+    Each cell is a single center particle. Constraints applied in priority order:
+      adhesion -> collision -> shell
+
+    Shell constraint uses ShellConstraint(i, a, b, c, radius=pc.radius) which
+    constrains the center to stay within effective ellipsoid (a-r, b-r, c-r).
+    This is the key fix vs. the old center-only model: cells near ellipsoid
+    tips get correctly confined based on their physical radius.
+
+    Args:
+        positions: (N, 3) center positions (N = number of cells)
+        velocities: (N, 3) velocities
+        inv_masses: (N,) inverse masses (typically all 1.0)
+        dt: time step
+        physics_cells: list of PhysicsCell
+        shell_params: (a, b, c) ellipsoid semi-axes
+        n_iter: XPBD constraint iterations per step
+        active_adhesions: mutable set of (i, j) cell-index pairs; None = no adhesion
+        adhesion_compliance: compliance for adhesion constraints
+        attach_margin: extra distance above r_i+r_j to form adhesion
+        detach_margin: extra distance above r_i+r_j to break adhesion
+        damping: velocity damping [0=inertial, 1=overdamped/biological]
+        shell_compliance: compliance for shell constraint (0=rigid)
+        collision_compliance: compliance for collision constraint (0=rigid)
+
+    Returns:
+        (new_positions, new_velocities)
+    """
+    x_prev = positions.copy()
+    x = positions + dt * velocities
+
+    a, b, c_ax = shell_params
+
+    # Shell: each center must fit its sphere inside the ellipsoid
+    shell_constraints = [
+        ShellConstraint(pc.center_idx, a, b, c_ax, pc.radius, shell_compliance)
+        for pc in physics_cells
+    ]
+
+    # Collision: center-to-center >= r_i + r_j (repulsion)
+    collision_constraints = []
+    n = len(physics_cells)
+    for i in range(n):
+        for j in range(i + 1, n):
+            ci, cj = physics_cells[i], physics_cells[j]
+            collision_constraints.append(
+                CollisionConstraint(
+                    ci.center_idx, cj.center_idx,
+                    ci.radius + cj.radius,
+                    collision_compliance,
+                )
+            )
+
+    # Adhesion: attraction for active pairs only
+    adhesion_constraints = []
+    if active_adhesions is not None:
+        _update_adhesion_pairs_pc(
+            x, physics_cells, active_adhesions, attach_margin, detach_margin
+        )
+        for i, j in active_adhesions:
+            ci, cj = physics_cells[i], physics_cells[j]
+            adhesion_constraints.append(
+                AdhesionConstraint(
+                    ci.center_idx, cj.center_idx,
+                    ci.radius + cj.radius,
+                    adhesion_compliance,
+                )
+            )
+
+    # Priority: adhesion -> collision -> shell
+    all_constraints = adhesion_constraints + collision_constraints + shell_constraints
+    lambdas = [0.0] * len(all_constraints)
+
+    for _ in range(n_iter):
+        for k, con in enumerate(all_constraints):
+            lambdas[k] = con.project(x, inv_masses, dt, lambdas[k])
+
+    new_vel = (x - x_prev) / dt * (1.0 - damping) if dt > 0 else np.zeros_like(x)
+    return x, new_vel
