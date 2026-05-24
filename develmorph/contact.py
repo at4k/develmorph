@@ -1,5 +1,6 @@
 # develmorph/contact.py
-import math
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -21,7 +22,10 @@ class ContactRecord:
     normal: np.ndarray  # unit vector from j to i
 
 
-def compute_contacts(physics_cells, positions):
+def compute_contacts(
+    physics_cells: list,
+    positions: np.ndarray,
+) -> list[ContactRecord]:
     """
     Compute all pairwise contacts between PhysicsCells.
 
@@ -44,6 +48,6 @@ def compute_contacts(physics_cells, positions):
                 continue
             normal = delta_vec / dist if dist > 1e-12 else np.array([1.0, 0.0, 0.0])
             r_harm = 2.0 * ci.radius * cj.radius / (ci.radius + cj.radius)
-            area = math.pi * overlap * r_harm
+            area = np.pi * overlap * r_harm
             records.append(ContactRecord(i=i, j=j, overlap=overlap, area=area, normal=normal))
     return records

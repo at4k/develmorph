@@ -1,5 +1,4 @@
 # tests/test_contact.py
-import math
 import numpy as np
 from develmorph.physics_cell import create_physics_cell
 from develmorph.contact import ContactRecord, compute_contacts
@@ -41,7 +40,7 @@ def test_contact_area_formula():
 
     delta = 0.5
     r_harm = 2 * 1.0 * 1.0 / (1.0 + 1.0)  # = 1.0
-    expected_area = math.pi * delta * r_harm
+    expected_area = np.pi * delta * r_harm
     assert abs(record.area - expected_area) < 1e-10
 
 
