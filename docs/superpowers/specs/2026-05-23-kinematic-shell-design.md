@@ -212,3 +212,28 @@ No surface point rearrangement. Daughters start overlapping and are separated by
 1. **k_adh tuning:** Contact-area adhesion introduces a new force scale. Need to re-tune against diamond formation metric.
 2. **Shell deformation fidelity:** For Phase 3, how much contact-plane flattening is needed to make the visualization biologically meaningful?
 3. **Spatial hashing threshold:** At what cell count does O(N²) collision become the bottleneck? Benchmark at 100, 200, 500 cells.
+
+---
+
+## Known Issues
+
+### KI-001: OffsetShellConstraint is geometrically infeasible for 4-cell stage
+
+**Discovered:** 2026-05-24  
+**Status:** Deferred to Phase 2 / Phase 3
+
+**Symptom:** All 4 daughter cells violate the OffsetShellConstraint in the final state (C_eff = +0.62 to +0.83). Cell surfaces extend outside the egg shell.
+
+**Root cause:** The OffsetShell ("entire sphere must fit inside ellipsoid") is geometrically incompatible with the diamond configuration for the current cell sizes. With asymmetric first division (60/40), AB daughters have r=0.870. The effective b-axis for AB daughters is b-r = 1.26-0.870 = 0.390. The diamond configuration requires D-V displacement > 0.390, making the constraint impossible to satisfy while also achieving diamond formation.
+
+Concretely: there is no arrangement of 4 cells (r ≈ 0.71–0.87) that simultaneously satisfies both OffsetShell and no-overlap when one of the required cell displacements exceeds the effective minor axis.
+
+**Why diamond still forms:** `shell_compliance=0.001` makes the shell constraint soft (α_tilde = 10). The collision constraint is rigid (α_tilde = 0) and wins when they conflict. The soft shell acts as an asymmetric guide rather than a hard boundary, which is sufficient to drive diamond formation (|EMS_y| = 0.748) but does not enforce full confinement.
+
+**Biological note:** In C. elegans, cells at the 4-cell stage ARE deformed by the eggshell. A rigid-sphere model inherently cannot represent this. Full resolution requires either cell deformation (Phase 3 SurfaceShell, or Voronoi-based cell geometry) or accepting the soft-boundary approximation.
+
+**Consequence for Phase 1:** The diamond formation metric (|EMS_y| > 0.5) is achieved, but cell volumes partially protrude outside the shell. The simulation is physically approximate, not exact.
+
+**Proposed resolution (Phase 2+):**
+- Short term: add a hard raw-shell constraint (compliance=0, radius=0) as a "center cannot escape the raw ellipsoid" floor, on top of the existing soft offset shell.
+- Long term: Phase 3 SurfaceShell with contact-plane deformation will visually correct the cell-shell conformation. Alternatively, replace collision constraint with soft interpenetration (contact mechanics) so cells can deform against the shell.
