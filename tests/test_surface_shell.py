@@ -28,12 +28,19 @@ def test_reconstruct_surface_shells_one_cell():
 
 def test_surface_shell_contact_flattens_toward_contact_plane():
     """
-    With a contact, mesh points near the contact direction should be
-    pulled inward (flattened) relative to the pure sphere.
+    With a contact where normal=[-1,0,0] (cell i is LEFT of cell j, n points left),
+    the contact face of cell i is its +x side (facing toward j).
+
+    - The +x point (contact-facing) must be pulled INWARD: x < radius = 1.0
+    - The -x point (back side) must NOT be moved: x == -radius = -1.0
+
+    Bug 1: flattening proj > 0 on n (not -n) targets the BACK side, not contact side.
+    Bug 2: re-normalizing dirs after flattening puts points back on the sphere surface.
+    Both bugs mean the contact-facing point is never actually flattened.
     """
     contact = ContactRecord(
         i=0, j=1, overlap=0.3, area=0.5,
-        normal=np.array([-1.0, 0.0, 0.0]),  # contact from +x direction
+        normal=np.array([-1.0, 0.0, 0.0]),  # unit vector from j to i (i is left of j)
     )
     shell = SurfaceShell(
         center=np.array([0.0, 0.0, 0.0]),
@@ -41,7 +48,17 @@ def test_surface_shell_contact_flattens_toward_contact_plane():
         contacts=[contact],
     )
     points = shell.mesh_points(n_subdivisions=0)
-    # Point along +x direction should be flattened (x < 1.0)
-    x_points = points[points[:, 0] > 0.5]  # points roughly along +x
-    if len(x_points) > 0:
-        assert x_points[:, 0].max() < 1.0 + 1e-6
+
+    x_vals = points[:, 0]
+    max_x = x_vals.max()
+    min_x = x_vals.min()
+
+    # Contact-facing point (+x side) must be pulled inward: strictly less than radius
+    assert max_x < 1.0 - 1e-6, (
+        f"Contact-facing point (+x) not flattened: max_x={max_x:.6f}, expected < {1.0 - 1e-6:.6f}"
+    )
+
+    # Back point (-x side) must remain untouched at -radius
+    assert abs(min_x - (-1.0)) < 1e-6, (
+        f"Back point (-x) incorrectly moved: min_x={min_x:.6f}, expected -1.0"
+    )

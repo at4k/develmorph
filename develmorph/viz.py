@@ -354,31 +354,37 @@ class SurfaceShell:
         """
         Return (M, 3) surface mesh points.
 
+        With no contacts, returns 6 points on the sphere surface (octahedron
+        vertices). With contacts, flattens points on the contact-facing side
+        proportional to overlap.
+
+        The contact-facing side for cell i is in the -normal direction
+        (normal = unit vector from j to i). Points facing toward j are pulled
+        inward by flatten_amount * projection.
+
         Args:
-            n_subdivisions: additional subdivision rounds (0 = 6 octahedron pts)
+            n_subdivisions: reserved for future subdivision (currently 6 pts always)
 
         Returns:
             (M, 3) array of world-space surface points
         """
-        dirs = OCTAHEDRON_DIRS.copy().astype(float)
+        # Base sphere: 6 octahedron vertices in world space
+        pts = self.center + self.radius * OCTAHEDRON_DIRS.astype(float)
 
-        # Flatten at each contact plane
+        # Flatten at each contact plane (work in world space, no re-normalization)
         for record in self.contacts:
-            # normal points from j toward i; contact is on the +normal side of i
-            # and on the -normal side of j. We flatten in the +normal direction.
+            # normal points from j toward i; contact face of cell i is in -normal direction
             n = record.normal  # unit vector from j to i
             flatten_amount = min(record.overlap * 0.5, self.radius * 0.3)
-            for k in range(len(dirs)):
-                proj = np.dot(dirs[k], n)
+            for k in range(len(pts)):
+                offset = pts[k] - self.center
+                # proj > 0 when this point faces toward j (contact-facing side)
+                proj = np.dot(offset / self.radius, -n)
                 if proj > 0.0:
-                    dirs[k] = dirs[k] - flatten_amount * proj * n / self.radius
-            # Re-normalize to keep points on sphere surface
-            for k in range(len(dirs)):
-                norm_k = np.linalg.norm(dirs[k])
-                if norm_k > 1e-12:
-                    dirs[k] = dirs[k] / norm_k
+                    # Pull inward: move in +n direction (away from j = toward center)
+                    pts[k] = pts[k] + flatten_amount * proj * n
 
-        return self.center + self.radius * dirs
+        return pts
 
 
 def reconstruct_surface_shells(
