@@ -12,6 +12,7 @@ from develmorph.project import (
     TriangleAreaConstraint,
     VolumeConstraint,
 )
+from develmorph.spatial_hash import SpatialHash
 
 
 def _max_surface_dist(positions, cb):
@@ -458,8 +459,9 @@ def step_pc(
 
     # Collision: center-to-center >= r_i + r_j (repulsion)
     collision_constraints = []
-    if use_spatial_hash and len(physics_cells) > 16:
-        from develmorph.spatial_hash import SpatialHash
+    # Brute-force O(N^2) is cheaper for small N; spatial hash pays off above this threshold.
+    _SPATIAL_HASH_MIN_CELLS = 16
+    if use_spatial_hash and len(physics_cells) > _SPATIAL_HASH_MIN_CELLS:
         max_radius = max(pc.radius for pc in physics_cells)
         sh = SpatialHash(cell_size=2.0 * max_radius * 1.1)
         sh.build(physics_cells, x)
