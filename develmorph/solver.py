@@ -413,6 +413,7 @@ def step_pc(
     shell_compliance=0.0,
     collision_compliance=0.0,
     use_area_adhesion=False,
+    use_spatial_hash=False,
 ):
     """
     Advance PhysicsCell state by one XPBD time step.
@@ -457,17 +458,25 @@ def step_pc(
 
     # Collision: center-to-center >= r_i + r_j (repulsion)
     collision_constraints = []
-    n = len(physics_cells)
-    for i in range(n):
-        for j in range(i + 1, n):
-            ci, cj = physics_cells[i], physics_cells[j]
-            collision_constraints.append(
-                CollisionConstraint(
-                    ci.center_idx, cj.center_idx,
-                    ci.radius + cj.radius,
-                    collision_compliance,
-                )
+    if use_spatial_hash and len(physics_cells) > 16:
+        from develmorph.spatial_hash import SpatialHash
+        max_radius = max(pc.radius for pc in physics_cells)
+        sh = SpatialHash(cell_size=2.0 * max_radius * 1.1)
+        sh.build(physics_cells, x)
+        candidate_pairs = sh.candidate_pairs()
+    else:
+        n = len(physics_cells)
+        candidate_pairs = {(i, j) for i in range(n) for j in range(i + 1, n)}
+
+    for i, j in candidate_pairs:
+        ci, cj = physics_cells[i], physics_cells[j]
+        collision_constraints.append(
+            CollisionConstraint(
+                ci.center_idx, cj.center_idx,
+                ci.radius + cj.radius,
+                collision_compliance,
             )
+        )
 
     # Adhesion: attraction for active pairs only
     adhesion_constraints = []

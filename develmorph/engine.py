@@ -214,6 +214,7 @@ class WorldPC:
         attach_margin=0.3,
         detach_margin=0.8,
         use_area_adhesion=False,
+        use_spatial_hash=False,
     ):
         self.physics_cells = list(physics_cells)
         self.positions = positions.copy()
@@ -230,6 +231,7 @@ class WorldPC:
         self.attach_margin = attach_margin
         self.detach_margin = detach_margin
         self.use_area_adhesion = use_area_adhesion
+        self.use_spatial_hash = use_spatial_hash
         self.step_count = 0
         self.active_adhesions = set()
 
@@ -254,6 +256,7 @@ class WorldPC:
             shell_compliance=self.shell_compliance,
             collision_compliance=self.collision_compliance,
             use_area_adhesion=self.use_area_adhesion,
+            use_spatial_hash=self.use_spatial_hash,
         )
         self.step_count += 1
 
