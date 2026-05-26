@@ -1,7 +1,6 @@
 # tests/test_power_diagram.py
 from __future__ import annotations
 import numpy as np
-import pytest
 from develmorph.power_diagram import make_ghost_points, VoronoiCell
 
 
@@ -35,18 +34,28 @@ def test_make_ghost_points_cover_all_axes():
     assert pts[:, 2].min() < -0.9, "Missing -z coverage"
 
 
-def test_voronoi_cell_is_dataclass():
-    import numpy as np
+def test_voronoi_cell_volume_gradient_single_face():
+    """volume_gradient = 0.5 * sum(area * normal) for all faces."""
+    normal = np.array([1.0, 0.0, 0.0])
     vc = VoronoiCell(
         index=0,
-        vertices=np.zeros((4, 3)),
-        volume=1.0,
-        face_areas=[1.0, 1.0, 1.0, 1.0],
-        face_normals=[np.array([1.,0.,0.])] * 4,
-        face_neighbors=[1, None, None, 2],
-        contact_areas={1: 1.0, 2: 1.0},
-        contact_normals={1: np.array([1.,0.,0.]), 2: np.array([0.,1.,0.])},
+        vertices=np.zeros((1, 3)),
+        volume=0.0,
+        face_areas=[2.0],
+        face_normals=[normal],
+        face_neighbors=[None],
+        contact_areas={},
+        contact_normals={},
     )
-    assert vc.index == 0
-    assert vc.volume == 1.0
-    assert len(vc.face_areas) == 4
+    grad = vc.volume_gradient()
+    np.testing.assert_allclose(grad, np.array([1.0, 0.0, 0.0]))
+
+
+def test_voronoi_cell_volume_gradient_empty():
+    """volume_gradient returns zero vector when no faces."""
+    vc = VoronoiCell(
+        index=0, vertices=np.zeros((0, 3)), volume=0.0,
+        face_areas=[], face_normals=[], face_neighbors=[],
+        contact_areas={}, contact_normals={},
+    )
+    np.testing.assert_array_equal(vc.volume_gradient(), np.zeros(3))
