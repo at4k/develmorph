@@ -49,9 +49,10 @@ class VoronoiCell:
         index: position in physics_cells list (not center_idx)
         vertices: (M, 3) world-space Voronoi vertices for this cell
         volume: cell volume computed from ConvexHull(vertices)
-        face_areas: area of each Voronoi face (includes shell-boundary faces)
+        face_areas: area of each inter-cell Voronoi face (excludes shell-boundary faces;
+            only ridges between real cells and between real/ghost cells from scipy Voronoi)
         face_normals: inward unit normal per face (toward cell center)
-        face_neighbors: PhysicsCell index of neighbor cell per face, or None for shell faces
+        face_neighbors: PhysicsCell index of neighbor cell per face, or None for ghost-cell faces
         contact_areas: {neighbor_index: area} for real-cell-to-real-cell faces only
         contact_normals: {neighbor_index: inward_unit_normal} for real-cell faces only
     """
@@ -71,6 +72,12 @@ class VoronoiCell:
 
         Formula: dV/dx_i = (1/2) * sum(A_f * n_f for all faces f)
         where n_f is the inward unit normal and A_f is face area.
+
+        Note: this gradient corresponds to the un-clipped Voronoi volume
+        (derived from scipy ridge faces). Shell-boundary faces are not
+        included in face_areas / face_normals, so this is NOT the gradient
+        of vc.volume (which is the shell-clipped volume). Callers that
+        need the clipped gradient must add shell-face contributions separately.
 
         Returns:
             (3,) gradient vector
