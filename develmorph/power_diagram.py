@@ -81,3 +81,203 @@ class VoronoiCell:
         for area, normal in zip(self.face_areas, self.face_normals):
             grad += area * normal
         return grad * 0.5
+
+
+def compute_voronoi_cells(
+    physics_cells: list,
+    positions: np.ndarray,
+    shell_params: tuple[float, float, float],
+    n_ghost: int = 50,
+    ghost_margin: float = 5.0,
+    n_shell_pts: int = 500,
+    seed: int = 42,
+) -> list[VoronoiCell]:
+    """
+    Compute Voronoi tessellation for all PhysicsCells within the egg shell.
+
+    Uses standard Voronoi (scipy) with ghost points far outside the ellipsoid to
+    prevent infinite Voronoi regions. Each cell's region is then clipped to the
+    ellipsoidal shell boundary using halfspace intersection, so that volumes sum
+    to approximately the shell volume.
+
+    A small z-jitter is applied to real cell centers to avoid the near-planar
+    degenerate case (Qhull "flat simplex" error).
+
+    Face data (areas, normals, contacts) is populated by _fill_face_data().
+
+    Args:
+        physics_cells: list of PhysicsCell
+        positions: (N, 3) center positions
+        shell_params: (a, b, c) ellipsoid semi-axes
+        n_ghost: number of ghost points far outside the shell surface
+        ghost_margin: distance beyond shell where ghost ellipsoid is placed;
+            large values (e.g. 5.0) ensure ghost Voronoi boundaries lie far
+            outside the shell so real cells own the full interior up to the shell
+        n_shell_pts: number of surface points used to build the convex-hull
+            approximation of the ellipsoidal boundary for clipping
+        seed: random seed for z-jitter reproducibility
+
+    Returns:
+        list[VoronoiCell] in same order as physics_cells
+    """
+    from scipy.spatial import ConvexHull, HalfspaceIntersection, Voronoi
+
+    a, b, c = shell_params
+    n_real = len(physics_cells)
+
+    centers = np.array([positions[pc.center_idx] for pc in physics_cells])
+
+    # Ghost points placed far outside the shell prevent infinite Voronoi regions
+    # without claiming interior volume from real cells.
+    ghost_pts = make_ghost_points(a, b, c, n=n_ghost, margin=ghost_margin)
+
+    # Build halfspace representation of the ellipsoidal shell boundary via a
+    # high-resolution convex hull of surface points.
+    shell_surface = make_ghost_points(a, b, c, n=n_shell_pts, margin=0.0)
+    shell_hull = ConvexHull(shell_surface)
+    shell_eqs = shell_hull.equations  # shape (F, 4): [A | b], A@x + b <= 0 inside
+
+    # Tiny z-jitter on real cells prevents near-planar degenerate Voronoi
+    rng = np.random.default_rng(seed=seed)
+    z_jitter = rng.uniform(-1e-4, 1e-4, size=n_real)
+    jittered = centers.copy()
+    jittered[:, 2] += z_jitter
+
+    all_pts = np.vstack([jittered, ghost_pts])
+    vor = Voronoi(all_pts)
+
+    result: list[VoronoiCell] = []
+    for i in range(n_real):
+        # Collect Voronoi halfspaces for cell i from the ridge structure.
+        # For each ridge between cell i and neighbor j, the halfspace is the
+        # half-plane closer to i than j: n @ x + b <= 0, n pointing away from i.
+        cell_hs: list[np.ndarray] = []
+        for pts_pair, verts_idx in zip(vor.ridge_points, vor.ridge_vertices):
+            ci, cj = int(pts_pair[0]), int(pts_pair[1])
+            if i not in (ci, cj):
+                continue
+            other = cj if ci == i else ci
+            mid = (all_pts[ci] + all_pts[cj]) * 0.5
+            normal = all_pts[other] - all_pts[i]
+            norm_mag = float(np.linalg.norm(normal))
+            if norm_mag < 1e-12:
+                continue
+            normal = normal / norm_mag
+            offset = float(-normal @ mid)
+            cell_hs.append(np.append(normal, offset))
+
+        if len(cell_hs) < 4:
+            # Not enough constraints: return zero-volume fallback
+            result.append(
+                VoronoiCell(
+                    index=i,
+                    vertices=np.zeros((0, 3)),
+                    volume=0.0,
+                    face_areas=[],
+                    face_normals=[],
+                    face_neighbors=[],
+                    contact_areas={},
+                    contact_normals={},
+                )
+            )
+            continue
+
+        # Clip Voronoi region to ellipsoidal shell by intersecting halfspaces
+        all_hs = np.vstack([cell_hs, shell_eqs])
+        feasible = jittered[i]
+
+        try:
+            hi = HalfspaceIntersection(all_hs, feasible)
+            verts = hi.intersections  # (M, 3) clipped vertices
+            hull = ConvexHull(verts)
+            volume = float(hull.volume)
+        except Exception:
+            verts = np.zeros((0, 3))
+            volume = 0.0
+
+        result.append(
+            VoronoiCell(
+                index=i,
+                vertices=verts,
+                volume=volume,
+                face_areas=[],
+                face_normals=[],
+                face_neighbors=[],
+                contact_areas={},
+                contact_normals={},
+            )
+        )
+
+    # Fill face data (areas, normals, contacts) from ridge information
+    _fill_face_data(result, vor, centers, n_real)
+
+    return result
+
+
+def _fill_face_data(
+    cells: list[VoronoiCell],
+    vor,
+    centers: np.ndarray,
+    n_real: int,
+) -> None:
+    """
+    Populate face_areas, face_normals, face_neighbors, contact_areas, contact_normals
+    for each VoronoiCell by iterating over scipy Voronoi ridges.
+
+    Modifies cells in-place.
+    """
+    # Temporary accumulator: {cell_idx: [(area, inward_normal, neighbor_or_None)]}
+    face_acc: dict[int, list] = {i: [] for i in range(n_real)}
+
+    for pts_pair, verts_idx in zip(vor.ridge_points, vor.ridge_vertices):
+        ci, cj = int(pts_pair[0]), int(pts_pair[1])
+
+        # Skip ghost-ghost ridges and infinite ridges
+        if ci >= n_real and cj >= n_real:
+            continue
+        if -1 in verts_idx:
+            continue
+
+        face_verts = vor.vertices[list(verts_idx)]  # (M_face, 3)
+        if len(face_verts) < 3:
+            continue
+
+        area = _polygon_area_3d(face_verts)
+        if area < 1e-12:
+            continue
+
+        # Add face to each participating real cell
+        for real_idx, other_idx in [(ci, cj), (cj, ci)]:
+            if real_idx >= n_real:
+                continue
+            neighbor = other_idx if other_idx < n_real else None
+
+            centroid = face_verts.mean(axis=0)
+            inward = centers[real_idx] - centroid
+            norm = np.linalg.norm(inward)
+            inward = inward / norm if norm > 1e-12 else np.array([1.0, 0.0, 0.0])
+
+            face_acc[real_idx].append((area, inward, neighbor))
+
+    # Write accumulated data into each VoronoiCell
+    for i, vc in enumerate(cells):
+        faces = face_acc[i]
+        vc.face_areas = [f[0] for f in faces]
+        vc.face_normals = [f[1] for f in faces]
+        vc.face_neighbors = [f[2] for f in faces]
+        vc.contact_areas = {
+            f[2]: f[0] for f in faces if f[2] is not None
+        }
+        vc.contact_normals = {
+            f[2]: f[1] for f in faces if f[2] is not None
+        }
+
+
+def _polygon_area_3d(verts: np.ndarray) -> float:
+    """Area of a planar polygon in 3D via triangle fan from first vertex."""
+    area = 0.0
+    v0 = verts[0]
+    for k in range(1, len(verts) - 1):
+        cross = np.cross(verts[k] - v0, verts[k + 1] - v0)
+        area += 0.5 * float(np.linalg.norm(cross))
+    return area

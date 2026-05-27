@@ -2,6 +2,8 @@
 from __future__ import annotations
 import numpy as np
 from develmorph.power_diagram import make_ghost_points, VoronoiCell
+from develmorph.physics_cell import create_physics_cell
+from develmorph.power_diagram import compute_voronoi_cells
 
 
 def test_make_ghost_points_shape():
@@ -59,3 +61,56 @@ def test_voronoi_cell_volume_gradient_empty():
         contact_areas={}, contact_normals={},
     )
     np.testing.assert_array_equal(vc.volume_gradient(), np.zeros(3))
+
+
+def _make_4cell_diamond():
+    """Return 4 PhysicsCells in diamond configuration + positions."""
+    shell = (1.84, 1.26, 1.04)
+    positions = np.zeros((0, 3))
+    cells = []
+    for pos in [
+        [0.8,  0.6,  0.02],
+        [0.8, -0.6, -0.02],
+        [-0.8, 0.6,  -0.01],
+        [-0.8,-0.6,  0.01],
+    ]:
+        cell, positions = create_physics_cell(np.array(pos), 0.819, positions)
+        cells.append(cell)
+    return cells, positions, shell
+
+
+def test_compute_voronoi_cells_returns_correct_count():
+    cells, positions, shell = _make_4cell_diamond()
+    voronoi = compute_voronoi_cells(cells, positions, shell)
+    assert len(voronoi) == 4
+
+
+def test_compute_voronoi_cells_all_finite():
+    """Each VoronoiCell must have finite volume > 0."""
+    cells, positions, shell = _make_4cell_diamond()
+    voronoi = compute_voronoi_cells(cells, positions, shell)
+    for vc in voronoi:
+        assert vc.volume > 0.0, f"cell {vc.index} has zero or negative volume"
+        assert np.all(np.isfinite(vc.vertices)), f"cell {vc.index} has non-finite vertices"
+
+
+def test_compute_voronoi_cells_volume_sum():
+    """Voronoi cell volumes should sum to approximately the egg shell volume."""
+    cells, positions, shell = _make_4cell_diamond()
+    a, b, c = shell
+    shell_volume = (4.0 / 3.0) * np.pi * a * b * c  # ~10.10
+
+    voronoi = compute_voronoi_cells(cells, positions, shell)
+    total = sum(vc.volume for vc in voronoi)
+
+    assert abs(total - shell_volume) / shell_volume < 0.05, (
+        f"Volume sum {total:.3f} differs from shell volume {shell_volume:.3f} by > 5%"
+    )
+
+
+def test_compute_voronoi_cells_indices_match():
+    """VoronoiCell.index must equal position in the returned list."""
+    cells, positions, shell = _make_4cell_diamond()
+    voronoi = compute_voronoi_cells(cells, positions, shell)
+    for i, vc in enumerate(voronoi):
+        assert vc.index == i
