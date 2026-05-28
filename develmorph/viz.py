@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+
+from develmorph.cell_body import OCTAHEDRON_DIRS
 
 
 def make_figure(positions, radii):
@@ -324,10 +327,6 @@ def visualize_timelapse_napari(
     napari.run()
 
 
-import numpy as np
-from develmorph.cell_body import OCTAHEDRON_DIRS
-
-
 class SurfaceShell:
     """
     Kinematic surface mesh for a PhysicsCell.
@@ -435,7 +434,7 @@ class VoronoiMesh:
 
         Already bounded by shell ghost points; no additional clipping needed.
         """
-        return self._cell.vertices
+        return self._cell.vertices.copy()
 
 
 def reconstruct_voronoi_meshes(voronoi_cells: list) -> list:

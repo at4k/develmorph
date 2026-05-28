@@ -1,6 +1,7 @@
 # tests/test_power_diagram.py
 from __future__ import annotations
 import numpy as np
+from develmorph.contact import compute_voronoi_contacts
 from develmorph.physics_cell import create_physics_cell
 from develmorph.power_diagram import compute_voronoi_cells, make_ghost_points, VoronoiCell
 
@@ -217,9 +218,6 @@ def test_volume_gradient_matches_finite_difference():
     assert np.linalg.norm(grad_analytical) > 1e-6, (
         f"Analytical gradient is too small: {grad_analytical}"
     )
-
-
-from develmorph.contact import compute_voronoi_contacts
 
 
 def test_compute_voronoi_contacts_returns_records():
