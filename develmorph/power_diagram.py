@@ -236,6 +236,12 @@ def _fill_face_data(
     # Temporary accumulator: {cell_idx: [(area, inward_normal, neighbor_or_None)]}
     face_acc: dict[int, list] = {i: [] for i in range(n_real)}
 
+    # Combined real + ghost points used by scipy Voronoi (same order as construction):
+    # first n_real entries are real centers; remaining are ghost points. We need ghost
+    # positions to compute correct face normals on real/ghost ridges, so reconstruct
+    # them from vor.points (works because Voronoi keeps the input ordering).
+    all_pts = vor.points
+
     for pts_pair, verts_idx in zip(vor.ridge_points, vor.ridge_vertices):
         ci, cj = int(pts_pair[0]), int(pts_pair[1])
 
@@ -253,14 +259,20 @@ def _fill_face_data(
         if area < 1e-12:
             continue
 
-        # Add face to each participating real cell
+        # Add face to each participating real cell. The Voronoi face between two
+        # equal-weight sites is the perpendicular bisector, so the true inward
+        # normal for cell `real_idx` points along (centers[real_idx] - other_pos).
+        # Using the face centroid here is wrong: the centroid lies in the face
+        # plane but not on the line between the two sites, so the resulting
+        # vector has a spurious in-plane component (and the two cells' normals
+        # are no longer antiparallel).
         for real_idx, other_idx in [(ci, cj), (cj, ci)]:
             if real_idx >= n_real:
                 continue
             neighbor = other_idx if other_idx < n_real else None
 
-            centroid = face_verts.mean(axis=0)
-            inward = centers[real_idx] - centroid
+            other_pos = all_pts[other_idx]
+            inward = centers[real_idx] - other_pos
             norm = np.linalg.norm(inward)
             inward = inward / norm if norm > 1e-12 else np.array([1.0, 0.0, 0.0])
 

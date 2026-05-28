@@ -1,6 +1,7 @@
 # tests/test_power_diagram.py
 from __future__ import annotations
 import numpy as np
+import pytest
 from develmorph.power_diagram import make_ghost_points, VoronoiCell
 from develmorph.physics_cell import create_physics_cell
 from develmorph.power_diagram import compute_voronoi_cells
@@ -114,3 +115,102 @@ def test_compute_voronoi_cells_indices_match():
     voronoi = compute_voronoi_cells(cells, positions, shell)
     for i, vc in enumerate(voronoi):
         assert vc.index == i
+
+
+def test_voronoi_contact_areas_symmetric():
+    """Contact area from cell i to j must equal contact area from j to i."""
+    cells, positions, shell = _make_4cell_diamond()
+    voronoi = compute_voronoi_cells(cells, positions, shell)
+    for vc in voronoi:
+        for neigh_idx, area_ij in vc.contact_areas.items():
+            area_ji = voronoi[neigh_idx].contact_areas.get(vc.index, None)
+            assert area_ji is not None, (
+                f"cell {vc.index} has contact with {neigh_idx} but not vice-versa"
+            )
+            assert abs(area_ij - area_ji) < 1e-6, (
+                f"Contact area asymmetry: cell {vc.index}->{neigh_idx} = {area_ij:.6f} "
+                f"but {neigh_idx}->{vc.index} = {area_ji:.6f}"
+            )
+
+
+def test_voronoi_contact_normals_antiparallel():
+    """Normal from i to j and normal from j to i should be antiparallel."""
+    cells, positions, shell = _make_4cell_diamond()
+    voronoi = compute_voronoi_cells(cells, positions, shell)
+    for vc in voronoi:
+        for neigh_idx, n_ij in vc.contact_normals.items():
+            n_ji = voronoi[neigh_idx].contact_normals.get(vc.index, None)
+            if n_ji is not None:
+                # Inward normals from opposite sides point in opposite directions
+                dot = float(np.dot(n_ij, n_ji))
+                assert dot < -0.5, (
+                    f"Normals not antiparallel: cell {vc.index}->{neigh_idx} "
+                    f"dot = {dot:.3f}"
+                )
+
+
+def test_volume_gradient_direction():
+    """
+    For a 2-cell system split at x=0, cell 0 at x>0 should have gradient
+    pointing in +x direction (moving cell 0 in +x increases its volume).
+    """
+    shell = (5.0, 5.0, 5.0)
+    positions = np.zeros((0, 3))
+    c0, positions = create_physics_cell(np.array([1.0, 0.0, 0.0]), 0.5, positions)
+    c1, positions = create_physics_cell(np.array([-1.0, 0.0, 0.0]), 0.5, positions)
+    voronoi = compute_voronoi_cells([c0, c1], positions, shell, n_ghost=100)
+
+    grad0 = voronoi[0].volume_gradient()
+    # Cell 0 is at +x; moving it further in +x increases its territory
+    assert grad0[0] > 0.0, f"Expected grad[0] > 0 (pointing +x), got {grad0}"
+
+
+@pytest.mark.xfail(
+    reason=(
+        "VoronoiCell.volume_gradient() uses the formula 0.5 * sum(A_f * n_f) "
+        "over inter-cell and ghost faces. For any closed polyhedron, the "
+        "divergence-theorem identity sum(A_f * n_outward_f) = 0 forces this "
+        "sum to be identically zero (up to floating-point noise), so the "
+        "formula does not represent the true gradient of the Voronoi volume "
+        "w.r.t. the cell center. The true gradient additionally requires the "
+        "face-rotation contribution (faces tilt as well as translate when "
+        "x_i moves), which the current implementation omits. The test is "
+        "kept as a TODO marker; a follow-up should either implement the full "
+        "gradient or restrict the formula's documented contract to a partial "
+        "(shell-boundary) quantity that the caller already understands."
+    ),
+    strict=True,
+)
+def test_volume_gradient_matches_finite_difference():
+    """Analytical gradient must match finite-difference estimate within 10%.
+
+    Uses a large shell (5.0) with 6 well-separated cells so shell clipping
+    has minimal effect — volume_gradient() (unclipped) should closely match
+    the FD gradient of vc.volume (clipped).
+    """
+    shell = (5.0, 5.0, 5.0)
+    positions = np.zeros((0, 3))
+    cells = []
+    for pos in [[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0], [0.0, -1.0, 0.0],
+                [0.0, 0.0, 1.0], [0.0, 0.0, -1.0]]:
+        cell, positions = create_physics_cell(np.array(pos), 0.4, positions)
+        cells.append(cell)
+
+    voronoi = compute_voronoi_cells(cells, positions, shell, n_ghost=100)
+    eps = 1e-4
+    # Test gradient for cell 0 (at +x)
+    grad_analytical = voronoi[0].volume_gradient()
+    grad_fd = np.zeros(3)
+    for dim in range(3):
+        p_plus = positions.copy()
+        p_plus[cells[0].center_idx, dim] += eps
+        v_plus = compute_voronoi_cells(cells, p_plus, shell, n_ghost=100)[0].volume
+
+        p_minus = positions.copy()
+        p_minus[cells[0].center_idx, dim] -= eps
+        v_minus = compute_voronoi_cells(cells, p_minus, shell, n_ghost=100)[0].volume
+
+        grad_fd[dim] = (v_plus - v_minus) / (2.0 * eps)
+
+    np.testing.assert_allclose(grad_analytical, grad_fd, rtol=0.10, atol=1e-3)
