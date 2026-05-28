@@ -70,23 +70,26 @@ class VoronoiCell:
         """
         Gradient of Voronoi volume w.r.t. this cell's center position.
 
-        Formula: dV/dx_i = (1/2) * sum(A_f * n_f for all faces f)
-        where n_f is the inward unit normal and A_f is face area.
+        Formula: dV/dx_i = (1/2) * sum_{j=real neighbors} A_ij * n̂_ij_inward
+        where the sum is over REAL-CELL faces only (face_neighbor is not None).
 
-        Note: this gradient corresponds to the un-clipped Voronoi volume
-        (derived from scipy ridge faces). Shell-boundary faces are not
-        included in face_areas / face_normals, so this is NOT the gradient
-        of vc.volume (which is the shell-clipped volume). Callers that
-        need the clipped gradient must add shell-face contributions separately.
+        Ghost-cell faces are excluded: ghost points approximate the infinite
+        exterior, and their Voronoi bisectors form a closed polyhedron together
+        with the real-cell faces. Summing over all faces gives zero by the
+        divergence theorem. Only the inter-cell (real-neighbor) faces carry the
+        true volume-gradient signal.
+
+        Note: this is the gradient of the UNclipped Voronoi volume measured by
+        real-cell face areas. For cells well inside the shell this closely matches
+        dV_clipped/dx_i; for boundary cells a small discrepancy remains.
 
         Returns:
             (3,) gradient vector
         """
-        if not self.face_areas:
-            return np.zeros(3)
         grad = np.zeros(3)
-        for area, normal in zip(self.face_areas, self.face_normals):
-            grad += area * normal
+        for area, normal, neighbor in zip(self.face_areas, self.face_normals, self.face_neighbors):
+            if neighbor is not None:
+                grad += area * normal
         return grad * 0.5
 
 
