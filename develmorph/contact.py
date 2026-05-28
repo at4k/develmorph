@@ -51,3 +51,46 @@ def compute_contacts(
             area = np.pi * overlap * r_harm
             records.append(ContactRecord(i=i, j=j, overlap=overlap, area=area, normal=normal))
     return records
+
+
+def compute_voronoi_contacts(voronoi_cells: list) -> list[ContactRecord]:
+    """
+    Extract ContactRecords from Voronoi cell face data.
+
+    Each face shared between two real cells produces one ContactRecord.
+    The 'overlap' field is 0.0 (no sphere-overlap concept in Voronoi model).
+    The 'area' field is the true Voronoi face area.
+    The 'normal' field is the inward unit normal of cell i=pair[0]
+    (points from j toward i in canonical i < j ordering).
+
+    Args:
+        voronoi_cells: list of VoronoiCell from compute_voronoi_cells()
+
+    Returns:
+        list of ContactRecord with i < j (no duplicates)
+    """
+    seen: set[tuple[int, int]] = set()
+    records: list[ContactRecord] = []
+
+    for vc in voronoi_cells:
+        for neigh_idx, area in vc.contact_areas.items():
+            pair = (min(vc.index, neigh_idx), max(vc.index, neigh_idx))
+            if pair in seen:
+                continue
+            seen.add(pair)
+
+            normal = vc.contact_normals[neigh_idx]  # inward to vc (from j toward i)
+            # Ensure canonical ordering: normal is from j=pair[1] toward i=pair[0]
+            if vc.index != pair[0]:
+                normal = -normal
+
+            records.append(
+                ContactRecord(
+                    i=pair[0],
+                    j=pair[1],
+                    overlap=0.0,
+                    area=float(area),
+                    normal=normal,
+                )
+            )
+    return records

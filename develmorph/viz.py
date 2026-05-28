@@ -412,3 +412,40 @@ def reconstruct_surface_shells(
             contacts=cell_contacts,
         ))
     return shells
+
+
+class VoronoiMesh:
+    """
+    Kinematic surface mesh for a PhysicsCell based on Voronoi tessellation.
+
+    Wraps a VoronoiCell and returns its vertices as the surface mesh.
+    Not part of XPBD; reconstructed post-step. Zero drift by construction.
+    """
+
+    def __init__(self, voronoi_cell) -> None:
+        """
+        Args:
+            voronoi_cell: VoronoiCell from compute_voronoi_cells()
+        """
+        self._cell = voronoi_cell
+
+    def mesh_points(self) -> np.ndarray:
+        """
+        Return (M, 3) Voronoi cell vertices.
+
+        Already bounded by shell ghost points; no additional clipping needed.
+        """
+        return self._cell.vertices
+
+
+def reconstruct_voronoi_meshes(voronoi_cells: list) -> list:
+    """
+    Build a VoronoiMesh for each VoronoiCell.
+
+    Args:
+        voronoi_cells: list of VoronoiCell from compute_voronoi_cells()
+
+    Returns:
+        list of VoronoiMesh, one per cell (same order)
+    """
+    return [VoronoiMesh(vc) for vc in voronoi_cells]

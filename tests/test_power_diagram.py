@@ -217,3 +217,29 @@ def test_volume_gradient_matches_finite_difference():
     assert np.linalg.norm(grad_analytical) > 1e-6, (
         f"Analytical gradient is too small: {grad_analytical}"
     )
+
+
+from develmorph.contact import compute_voronoi_contacts
+
+
+def test_compute_voronoi_contacts_returns_records():
+    cells, positions, shell = _make_4cell_diamond()
+    voronoi = compute_voronoi_cells(cells, positions, shell)
+    contacts = compute_voronoi_contacts(voronoi)
+    assert len(contacts) > 0  # 4-cell diamond has at least 4 contacts
+
+
+def test_compute_voronoi_contacts_no_duplicates():
+    cells, positions, shell = _make_4cell_diamond()
+    voronoi = compute_voronoi_cells(cells, positions, shell)
+    contacts = compute_voronoi_contacts(voronoi)
+    pairs = [(cr.i, cr.j) for cr in contacts]
+    assert len(pairs) == len(set(pairs)), "Duplicate contact pairs"
+
+
+def test_compute_voronoi_contacts_area_positive():
+    cells, positions, shell = _make_4cell_diamond()
+    voronoi = compute_voronoi_cells(cells, positions, shell)
+    contacts = compute_voronoi_contacts(voronoi)
+    for cr in contacts:
+        assert cr.area > 0, f"Contact {cr.i}-{cr.j} has non-positive area"
