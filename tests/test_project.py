@@ -11,6 +11,7 @@ from develmorph.project import (
     TetrahedralVolumeConstraint,
     TriangleAreaConstraint,
     VolumeConstraint,
+    VoronoiVolumeConstraint,
 )
 
 
@@ -589,10 +590,6 @@ def test_tet_volume_constraint_surface_gradients():
 
         np.testing.assert_allclose(analytic_grad, num_grad, atol=1e-5,
                                    err_msg=f"gradient mismatch for particle {particle_idx}")
-
-
-# Append at end of tests/test_project.py
-from develmorph.project import VoronoiVolumeConstraint
 
 
 class _FakeVoronoiCell:
