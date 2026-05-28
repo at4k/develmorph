@@ -589,3 +589,74 @@ def test_tet_volume_constraint_surface_gradients():
 
         np.testing.assert_allclose(analytic_grad, num_grad, atol=1e-5,
                                    err_msg=f"gradient mismatch for particle {particle_idx}")
+
+
+# Append at end of tests/test_project.py
+from develmorph.project import VoronoiVolumeConstraint
+
+
+class _FakeVoronoiCell:
+    """Minimal stand-in for VoronoiCell used in constraint tests."""
+    def __init__(self, volume, gradient):
+        self.volume = volume
+        self._gradient = np.array(gradient, dtype=float)
+
+    def volume_gradient(self):
+        return self._gradient.copy()
+
+
+def test_voronoi_volume_constraint_no_correction_when_target_met():
+    """If current volume equals target, no position change."""
+    positions = np.array([[0.0, 0.0, 0.0]])
+    inv_masses = np.ones(1)
+    vc = VoronoiVolumeConstraint(center_idx=0, target_volume=5.0, compliance=0.0)
+    fake_cell = _FakeVoronoiCell(volume=5.0, gradient=[1.0, 0.0, 0.0])
+    vc.set_voronoi_cell(fake_cell)
+
+    pos_before = positions.copy()
+    vc.project(positions, inv_masses, dt=0.01, lam=0.0)
+    np.testing.assert_array_almost_equal(positions, pos_before)
+
+
+def test_voronoi_volume_constraint_corrects_volume_deficit():
+    """If volume < target, center is pushed along gradient to increase volume."""
+    positions = np.array([[0.0, 0.0, 0.0]])
+    inv_masses = np.ones(1)
+    # Target 5.0, current 4.0 -> C = 4.0 - 5.0 = -1.0 -> push in +gradient
+    vc = VoronoiVolumeConstraint(center_idx=0, target_volume=5.0, compliance=0.0)
+    fake_cell = _FakeVoronoiCell(volume=4.0, gradient=[1.0, 0.0, 0.0])
+    vc.set_voronoi_cell(fake_cell)
+
+    vc.project(positions, inv_masses, dt=0.01, lam=0.0)
+    # Position should increase in +x (gradient direction, volume deficit corrected)
+    assert positions[0, 0] > 0.0, "Expected position to move in +x to restore volume"
+
+
+def test_voronoi_volume_constraint_no_action_when_no_cell_set():
+    """project() does nothing if set_voronoi_cell() was never called."""
+    positions = np.array([[1.0, 2.0, 3.0]])
+    inv_masses = np.ones(1)
+    vc = VoronoiVolumeConstraint(center_idx=0, target_volume=1.0, compliance=0.01)
+    pos_before = positions.copy()
+    vc.project(positions, inv_masses, dt=0.01, lam=0.0)
+    np.testing.assert_array_almost_equal(positions, pos_before)
+
+
+def test_voronoi_volume_constraint_soft_compliance_reduces_correction():
+    """Higher compliance should produce a smaller position correction."""
+    inv_masses = np.ones(1)
+    dt = 0.01
+
+    def correction_magnitude(compliance):
+        pos = np.array([[0.0, 0.0, 0.0]])
+        con = VoronoiVolumeConstraint(center_idx=0, target_volume=5.0, compliance=compliance)
+        fake_cell = _FakeVoronoiCell(volume=4.0, gradient=[1.0, 0.0, 0.0])
+        con.set_voronoi_cell(fake_cell)
+        con.project(pos, inv_masses, dt=dt, lam=0.0)
+        return abs(pos[0, 0])
+
+    rigid_correction = correction_magnitude(0.0)
+    soft_correction = correction_magnitude(0.1)
+    assert soft_correction < rigid_correction, (
+        "Soft compliance should produce smaller correction than rigid"
+    )

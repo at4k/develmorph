@@ -500,3 +500,60 @@ class TetrahedralVolumeConstraint:
         x[self.i2] += delta_lambda * inv_masses[self.i2] * g2
 
         return lambda_acc
+
+
+class VoronoiVolumeConstraint:
+    """
+    XPBD constraint enforcing Voronoi cell volume = target_volume.
+
+    Uses the "frozen Voronoi" approximation: the VoronoiCell is set once per
+    XPBD step via set_voronoi_cell(), and the gradient is held fixed during
+    all n_iter constraint iterations.
+
+    Constraint function: C = V_voronoi - V_target (equality)
+    Gradient: dC/dx_center = VoronoiCell.volume_gradient()
+    """
+
+    def __init__(
+        self, center_idx: int, target_volume: float, compliance: float = 0.01
+    ) -> None:
+        self.center_idx = center_idx
+        self.target_volume = float(target_volume)
+        self.compliance = float(compliance)
+        self._voronoi_cell = None
+
+    def set_voronoi_cell(self, vc) -> None:
+        """Attach the current-step VoronoiCell before XPBD iterations."""
+        self._voronoi_cell = vc
+
+    def project(
+        self, x: np.ndarray, inv_masses: np.ndarray, dt: float, lam: float
+    ) -> float:
+        """
+        Apply one XPBD correction step for the volume constraint.
+
+        XPBD update:
+            C = V_voronoi - V_target
+            grad = volume_gradient()
+            alpha_tilde = compliance / dt^2
+            d_lambda = (-C - alpha_tilde * lam) / (w * ||grad||^2 + alpha_tilde)
+            dx = w * d_lambda * grad
+
+        Returns updated lambda accumulator.
+        """
+        if self._voronoi_cell is None or self._voronoi_cell.volume <= 0.0:
+            return lam
+
+        C = self._voronoi_cell.volume - self.target_volume
+        grad = self._voronoi_cell.volume_gradient()
+
+        alpha_tilde = self.compliance / (dt * dt) if dt > 0.0 else 0.0
+        w = float(inv_masses[self.center_idx])
+        denom = w * float(np.dot(grad, grad)) + alpha_tilde
+
+        if denom < 1e-12:
+            return lam
+
+        d_lam = (-C - alpha_tilde * lam) / denom
+        x[self.center_idx] = x[self.center_idx] + w * d_lam * grad
+        return lam + d_lam
