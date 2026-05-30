@@ -215,6 +215,8 @@ class WorldPC:
         detach_margin=0.8,
         use_area_adhesion=False,
         use_spatial_hash=False,
+        use_voronoi: bool = False,
+        voronoi_volume_compliance: float = 0.01,
     ):
         self.physics_cells = list(physics_cells)
         self.positions = positions.copy()
@@ -232,6 +234,9 @@ class WorldPC:
         self.detach_margin = detach_margin
         self.use_area_adhesion = use_area_adhesion
         self.use_spatial_hash = use_spatial_hash
+        self.use_voronoi = use_voronoi
+        self.voronoi_volume_compliance = voronoi_volume_compliance
+        self.voronoi_cells: list = []
         self.step_count = 0
         self.active_adhesions = set()
 
@@ -257,7 +262,14 @@ class WorldPC:
             collision_compliance=self.collision_compliance,
             use_area_adhesion=self.use_area_adhesion,
             use_spatial_hash=self.use_spatial_hash,
+            use_voronoi=self.use_voronoi,
+            voronoi_volume_compliance=self.voronoi_volume_compliance,
         )
+        if self.use_voronoi:
+            from develmorph.power_diagram import compute_voronoi_cells
+            self.voronoi_cells = compute_voronoi_cells(
+                self.physics_cells, self.positions, self.shell_params
+            )
         self.step_count += 1
 
     def run(self, n_steps):

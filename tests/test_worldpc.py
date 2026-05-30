@@ -334,3 +334,59 @@ def test_step_pc_voronoi_volumes_conserved():
             f"Cell {pc.name}: volume={vc.volume:.3f}, target={target:.3f}, "
             f"relative error={rel_error:.1%}"
         )
+
+
+def test_worldpc_use_voronoi_flag():
+    """WorldPC accepts use_voronoi=True without error."""
+    import numpy as np
+    from develmorph.engine import WorldPC
+    from develmorph.physics_cell import create_physics_cell
+
+    shell = (1.84, 1.26, 1.04)
+    positions = np.zeros((0, 3))
+    cells = []
+    for pos in [[0.8, 0.6, 0.02], [-0.8, -0.6, -0.02]]:
+        cell, positions = create_physics_cell(np.array(pos), 0.819, positions)
+        cells.append(cell)
+
+    world = WorldPC(
+        physics_cells=cells,
+        positions=positions,
+        shell_params=shell,
+        dt=0.01,
+        n_iter=5,
+        damping=1.0,
+        use_voronoi=True,
+    )
+    world.step()
+    assert np.all(np.isfinite(world.positions))
+
+
+def test_worldpc_voronoi_cells_stored_after_step():
+    """After step(), WorldPC.voronoi_cells is populated when use_voronoi=True."""
+    import numpy as np
+    from develmorph.engine import WorldPC
+    from develmorph.physics_cell import create_physics_cell
+
+    shell = (1.84, 1.26, 1.04)
+    positions = np.zeros((0, 3))
+    cells = []
+    for pos in [[0.8, 0.6, 0.02], [0.8, -0.6, -0.02],
+                [-0.8, 0.6, -0.01], [-0.8, -0.6, 0.01]]:
+        cell, positions = create_physics_cell(np.array(pos), 0.819, positions)
+        cells.append(cell)
+
+    world = WorldPC(
+        physics_cells=cells,
+        positions=positions,
+        shell_params=shell,
+        dt=0.01,
+        n_iter=5,
+        damping=1.0,
+        use_voronoi=True,
+    )
+    assert world.voronoi_cells == []  # empty before first step
+    world.step()
+    assert len(world.voronoi_cells) == 4
+    for vc in world.voronoi_cells:
+        assert vc.volume > 0
