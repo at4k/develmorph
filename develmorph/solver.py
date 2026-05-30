@@ -2,6 +2,7 @@ import math
 
 import numpy as np
 
+from develmorph.power_diagram import compute_voronoi_cells
 from develmorph.project import (
     AdhesionConstraint,
     CollisionConstraint,
@@ -11,6 +12,7 @@ from develmorph.project import (
     TetrahedralVolumeConstraint,
     TriangleAreaConstraint,
     VolumeConstraint,
+    VoronoiVolumeConstraint,
 )
 from develmorph.spatial_hash import SpatialHash
 
@@ -415,6 +417,9 @@ def step_pc(
     collision_compliance=0.0,
     use_area_adhesion=False,
     use_spatial_hash=False,
+    use_voronoi: bool = False,
+    voronoi_volume_compliance: float = 0.01,
+    voronoi_n_ghost: int = 50,
 ):
     """
     Advance PhysicsCell state by one XPBD time step.
@@ -448,6 +453,55 @@ def step_pc(
     """
     x_prev = positions.copy()
     x = positions + dt * velocities
+
+    if use_voronoi:
+        a, b, c_ax = shell_params
+
+        # Compute Voronoi tessellation from predicted positions (frozen for this step)
+        voronoi_cells = compute_voronoi_cells(
+            physics_cells, x, shell_params, n_ghost=voronoi_n_ghost
+        )
+
+        # Shell: center inside raw ellipsoid (no radius offset)
+        shell_constraints = [
+            ShellConstraint(pc.center_idx, a, b, c_ax, 0.0, shell_compliance)
+            for pc in physics_cells
+        ]
+
+        # Volume: Voronoi region volume = target sphere volume
+        volume_constraints = []
+        for i, pc in enumerate(physics_cells):
+            target_v = (4.0 / 3.0) * math.pi * pc.radius ** 3
+            con = VoronoiVolumeConstraint(pc.center_idx, target_v, voronoi_volume_compliance)
+            con.set_voronoi_cell(voronoi_cells[i])
+            volume_constraints.append(con)
+
+        # Adhesion: Voronoi contact-area-weighted
+        adhesion_constraints = []
+        if active_adhesions is not None:
+            _update_adhesion_pairs_pc(
+                x, physics_cells, active_adhesions, attach_margin, detach_margin
+            )
+            for i, j in active_adhesions:
+                ci, cj = physics_cells[i], physics_cells[j]
+                area = voronoi_cells[i].contact_areas.get(j, 0.0)
+                effective_compliance = adhesion_compliance / (area + 1e-6)
+                adhesion_constraints.append(
+                    AdhesionConstraint(
+                        ci.center_idx, cj.center_idx,
+                        ci.radius + cj.radius,
+                        effective_compliance,
+                    )
+                )
+
+        all_constraints = adhesion_constraints + volume_constraints + shell_constraints
+        lambdas = [0.0] * len(all_constraints)
+        for _ in range(n_iter):
+            for k, con in enumerate(all_constraints):
+                lambdas[k] = con.project(x, inv_masses, dt, lambdas[k])
+
+        new_vel = (x - x_prev) / dt * (1.0 - damping) if dt > 0 else np.zeros_like(x)
+        return x, new_vel
 
     a, b, c_ax = shell_params
 

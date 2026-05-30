@@ -231,3 +231,106 @@ def test_step_pc_area_adhesion_attracts_cells():
 
     dist_after = np.linalg.norm(new_pos[c1.center_idx] - new_pos[c2.center_idx])
     assert dist_after < 2.1  # moved toward rest_length
+
+
+# Append at end of tests/test_worldpc.py
+
+
+def test_step_pc_voronoi_mode_returns_finite():
+    """step_pc with use_voronoi=True returns finite positions."""
+    import numpy as np
+    from develmorph.physics_cell import create_physics_cell
+    from develmorph.solver import step_pc
+
+    shell = (1.84, 1.26, 1.04)
+    positions = np.zeros((0, 3))
+    cells = []
+    for pos in [[0.8, 0.6, 0.02], [0.8, -0.6, -0.02],
+                [-0.8, 0.6, -0.01], [-0.8, -0.6, 0.01]]:
+        cell, positions = create_physics_cell(np.array(pos), 0.819, positions)
+        cells.append(cell)
+
+    velocities = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
+
+    new_pos, new_vel = step_pc(
+        positions, velocities, inv_masses,
+        dt=0.01, physics_cells=cells, shell_params=shell,
+        n_iter=5, damping=1.0, use_voronoi=True,
+    )
+    assert np.all(np.isfinite(new_pos)), "Non-finite positions in Voronoi mode"
+
+
+def test_step_pc_voronoi_centers_inside_raw_ellipsoid():
+    """In Voronoi mode, cell centers must stay inside the raw ellipsoid."""
+    import numpy as np
+    from develmorph.physics_cell import create_physics_cell
+    from develmorph.solver import step_pc
+
+    a, b, c = 1.84, 1.26, 1.04
+    shell = (a, b, c)
+    positions = np.zeros((0, 3))
+    cells = []
+    for pos in [[0.8, 0.6, 0.02], [0.8, -0.6, -0.02],
+                [-0.8, 0.6, -0.01], [-0.8, -0.6, 0.01]]:
+        cell, positions = create_physics_cell(np.array(pos), 0.819, positions)
+        cells.append(cell)
+
+    velocities = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
+
+    for _ in range(20):
+        positions, velocities = step_pc(
+            positions, velocities, inv_masses,
+            dt=0.01, physics_cells=cells, shell_params=shell,
+            n_iter=10, damping=1.0, use_voronoi=True,
+        )
+
+    for pc in cells:
+        x, y, z = positions[pc.center_idx]
+        C = (x / a) ** 2 + (y / b) ** 2 + (z / c) ** 2
+        assert C <= 1.0 + 1e-3, (
+            f"Cell {pc.name} center outside raw ellipsoid: C={C:.4f}"
+        )
+
+
+def test_step_pc_voronoi_volumes_conserved():
+    """After settling, Voronoi cell volumes should be within 15% of sphere target.
+
+    Uses n_iter=1 per step: the "frozen Voronoi" approximation is stable with a
+    single XPBD iteration per step (volumes ~9% above sphere target due to shell
+    packing). Higher n_iter causes instability because the frozen gradient is
+    applied multiple times without recomputing the tessellation.
+    """
+    import numpy as np
+    from develmorph.physics_cell import create_physics_cell
+    from develmorph.power_diagram import compute_voronoi_cells
+    from develmorph.solver import step_pc
+
+    shell = (1.84, 1.26, 1.04)
+    positions = np.zeros((0, 3))
+    cells = []
+    for pos in [[0.8, 0.6, 0.02], [0.8, -0.6, -0.02],
+                [-0.8, 0.6, -0.01], [-0.8, -0.6, 0.01]]:
+        cell, positions = create_physics_cell(np.array(pos), 0.819, positions)
+        cells.append(cell)
+
+    velocities = np.zeros_like(positions)
+    inv_masses = np.ones(len(positions))
+
+    for _ in range(50):
+        positions, velocities = step_pc(
+            positions, velocities, inv_masses,
+            dt=0.01, physics_cells=cells, shell_params=shell,
+            n_iter=1, damping=1.0,
+            use_voronoi=True, voronoi_volume_compliance=0.01,
+        )
+
+    voronoi = compute_voronoi_cells(cells, positions, shell)
+    for vc, pc in zip(voronoi, cells):
+        target = (4.0 / 3.0) * np.pi * pc.radius ** 3
+        rel_error = abs(vc.volume - target) / target
+        assert rel_error < 0.15, (
+            f"Cell {pc.name}: volume={vc.volume:.3f}, target={target:.3f}, "
+            f"relative error={rel_error:.1%}"
+        )
