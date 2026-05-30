@@ -447,6 +447,13 @@ def step_pc(
         damping: velocity damping [0=inertial, 1=overdamped/biological]
         shell_compliance: compliance for shell constraint (0=rigid)
         collision_compliance: compliance for collision constraint (0=rigid)
+        use_voronoi: if True, use Voronoi tessellation mode (Phase 5); replaces
+            CollisionConstraint with VoronoiVolumeConstraint and sets shell
+            radius offset to 0 so centers are constrained to the raw ellipsoid
+        voronoi_volume_compliance: XPBD compliance for VoronoiVolumeConstraint
+            (0.01 soft; increase if oscillations occur; frozen Voronoi is stable
+            at n_iter=1, may diverge at n_iter>3)
+        voronoi_n_ghost: number of ghost points for shell boundary in power diagram
 
     Returns:
         (new_positions, new_velocities)
